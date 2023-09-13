@@ -2,20 +2,20 @@
 
 ScAnt Terminal User Interface
 
-A simplified version of the scAnt GUI, for use on an Ubuntu-based system. Runs directly in the terminal.
+A simplified version of the scAnt GUI, for use on an Ubuntu-based system. Runs directly in the terminal. Tested on Ubuntu 20.04 LTS.
 
 ### Installation
 
 1. Install the dependencies:
 ```
-sudo apt install python3 python3-pip python3-tk python3-pil.imagetk
+sudo apt install python3 python3-pip
 ```
 2. Install these packages into a new virtual environment:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip3 install gphoto2 --only-binary :all:
-pip3 install pyusb ticlib
+pip3 install pyusb ticlib textual textual-dev textual-slider Pillow imageio rawpy ticlib 
 ```
 3. Install the Ubuntu drivers for Stepper motor controllers ([reference](https://www.pololu.com/product/3134/resources))
 ```bash
@@ -33,8 +33,10 @@ gphoto2 --auto-detect # Confirm that the installation worked
 ```
 5. Add the current user to the group that can access the USB ports:
 ```bash
-# List all the USB devices and their owners
-ls -l /dev/bus/usb/001
+sudo adduser $USER dialout
+sudo adduser $USER plugdev
+```
+
 
 
 ### Configuration
@@ -48,12 +50,19 @@ ticcmd --list
 gphoto2 --auto-detect
 ```
 
-These should return information about the devices (names of stepper motors and Canon camera). 
+These should return information about the devices (names of stepper motors and Canon camera). To test these within the Python environment:
+
+3. Confirm that Python, USB, camera, stepper motors are working:
+```bash
+python3 examples/test_gphoto2_camera_capture.py
+python3 test_gphoto2_camera_info.py
+python3 test_libtic.py
+```
 
 ### Usage
 
-Take a photo and activate the stepper motors to check they are working within Python:
-```bash
-sudo python3 # Sudo needed to interface with the drivers
+Simply run:
 
-```# scAnt-tui
+```bash
+python3 scripts/main.py
+```
