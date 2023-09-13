@@ -1,20 +1,21 @@
 StepperMotor {
-    layout: horizontal;
+    layout: grid;
+    grid-size: 10 2;
     background: $boost;
-    height: 5;
+    height: 15;
     margin: 1;
     min-width: 50;
     padding: 1;
 }
 
 Slider {
-    content-align: center middle;
     text-opacity: 60%;
     height: 3;
+    column-span: 3;
 }
 
 Button {
-    width: 16;
+    width: 12;
 }
 
 #energize_stepper {
@@ -22,12 +23,10 @@ Button {
 }
 
 #deenergize_stepper {
-    dock: left;
     display: none;
 }
 
 #home_stepper {
-    dock: right;
     display: none;
 }
 

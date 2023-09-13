@@ -3,7 +3,7 @@ import subprocess
 from textual import on
 from textual import log
 from textual.app import App, ComposeResult
-from textual.widgets import Footer, Header, Button, Static, Select, Label
+from textual.widgets import Footer, Header, Button, Static, Select, Label, Input
 from textual.containers import ScrollableContainer
 from textual.reactive import reactive
 from textual_slider import Slider
@@ -77,7 +77,8 @@ class StepperMotor(Static):
             print(self.id, " serial number: ", self.serial_number)
 
     def compose(self) -> ComposeResult:
-        """Create child widgets for the stepper motor"""
+        """Create child widgets for the stepper motor, with a top row of changeable variables and a bottom row of fixed values"""
+
         yield Button("Energize", id="energize_stepper", variant="success")
         yield Button("Deenergize", id="deenergize_stepper", variant="error")
         yield Button("Home", id="home_stepper", variant="warning")
@@ -86,6 +87,15 @@ class StepperMotor(Static):
         yield Select(options=((axis, axis) for axis in self.axes), id="axis_stepper", value=self.axes[int(self.id.split("_")[-1]) - 1], allow_blank=False)
         yield Label("Serial: ", id="serial_label")
         yield Select(options=((serial, serial) for serial in self.serial_numbers), id="serial_stepper", value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "", allow_blank=False)
+        yield Label("Current position: ", id="current_position_label")
+        yield Input(id="current_position_stepper", value=str(self.current_position), disabled=True)
+        yield Label("Target position: ", id="target_position_label")
+        yield Input(id="target_position_stepper", value=str(self.target_position))
+        yield Label("Max value: ", id="max_value_label")
+        yield Input(id="max_value_stepper", value=str(self.max_value))
+        yield Label("Min value: ", id="min_value_label")
+        yield Input(id="min_value_stepper", value=str(self.min_value))
+
 
 class Scant(App):
     """The main application."""
@@ -100,7 +110,11 @@ class Scant(App):
         """Create child widgets for the app"""
         yield Header()
         yield Footer()
-        yield ScrollableContainer(StepperMotor(id="stepper_motor_1"), StepperMotor(id="stepper_motor_2"), StepperMotor(id="stepper_motor_3"), id="scant")
+        yield ScrollableContainer(
+            StepperMotor(id="stepper_motor_1"), 
+            StepperMotor(id="stepper_motor_2"), 
+            StepperMotor(id="stepper_motor_3"), 
+            id="scant")
     
     def action_toggle_dark(self) -> None:
         """An action to toggle dark mode."""
