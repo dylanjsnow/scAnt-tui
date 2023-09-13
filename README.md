@@ -55,8 +55,8 @@ These should return information about the devices (names of stepper motors and C
 3. Confirm that Python, USB, camera, stepper motors are working:
 ```bash
 python3 examples/test_gphoto2_camera_capture.py
-python3 test_gphoto2_camera_info.py
-python3 test_libtic.py
+python3 examples/test_gphoto2_camera_info.py
+python3 examples/test_libtic.py
 ```
 
 ### Usage
@@ -65,4 +65,11 @@ Simply run:
 
 ```bash
 python3 scripts/main.py
+```
+
+For development run:
+
+```bash
+textual console -x SYSTEM -x EVENT -x DEBUG -x INFO # textual console -v for verbose logs
+textual run --dev scripts/main.py
 ```
