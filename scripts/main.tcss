@@ -8,46 +8,24 @@ StepperMotor {
     padding: 1;
 }
 
-Slider {
-    text-opacity: 60%;
-    height: 3;
-    column-span: 3;
-}
-
 Button {
     width: 12;
 }
 
-#energize_stepper {
-    dock: left;
+Slider {
+    text-opacity: 20%;
+    height: 3;
+    column-span: 3;
+
 }
 
-#deenergize_stepper {
-    display: none;
+.deenergized Slider {
+    border: red;
+    text-opacity: 50%;
 }
 
-#home_stepper {
-    display: none;
-}
-
-.energized_stepper {
-    text-style: bold;
-    background: $success;
-    color: $text;
-}
 
 .energized Slider {
-    text-opacity: 100%
-}
-
-.energized #energize_stepper {
-    display: none;
-}
-
-.energized #deenergize_stepper {
-    display: block;
-}
-
-.energized #home_stepper {
-    display: block;
+    text-opacity: 100%;
+    border: green;
 }

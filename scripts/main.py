@@ -50,9 +50,11 @@ class StepperMotor(Static):
         """Handle a button press"""
         if event.button.id == "energize_stepper":
             self.add_class("energized")
+            self.remove_class("deenergized")
             self.energized = True
         elif event.button.id == "deenergize_stepper":
             self.remove_class("energized")
+            self.add_class("deenergized")
             self.energized = False
         elif event.button.id == "home_stepper":
             pass
@@ -111,9 +113,9 @@ class Scant(App):
         yield Header()
         yield Footer()
         yield ScrollableContainer(
-            StepperMotor(id="stepper_motor_1"), 
-            StepperMotor(id="stepper_motor_2"), 
-            StepperMotor(id="stepper_motor_3"), 
+            StepperMotor(id="stepper_motor_1", classes=["deenergized"]), 
+            StepperMotor(id="stepper_motor_2", classes=["deenergized"]), 
+            StepperMotor(id="stepper_motor_3", classes=["deenergized"]), 
             id="scant")
     
     def action_toggle_dark(self) -> None:
