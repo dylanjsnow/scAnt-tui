@@ -1,0 +1,54 @@
+StepperMotor {
+    layout: horizontal;
+    background: $boost;
+    height: 5;
+    margin: 1;
+    min-width: 50;
+    padding: 1;
+}
+
+Slider {
+    content-align: center middle;
+    text-opacity: 60%;
+    height: 3;
+}
+
+Button {
+    width: 16;
+}
+
+#energize_stepper {
+    dock: left;
+}
+
+#deenergize_stepper {
+    dock: left;
+    display: none;
+}
+
+#home_stepper {
+    dock: right;
+    display: none;
+}
+
+.energized_stepper {
+    text-style: bold;
+    background: $success;
+    color: $text;
+}
+
+.energized Slider {
+    text-opacity: 100%
+}
+
+.energized #energize_stepper {
+    display: none;
+}
+
+.energized #deenergize_stepper {
+    display: block;
+}
+
+.energized #home_stepper {
+    display: block;
+}
