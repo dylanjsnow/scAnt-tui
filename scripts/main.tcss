@@ -22,15 +22,18 @@ Slider {
 .deenergized {
     color: red;
     text-opacity: 50%;
+    border: red;
 }
 
 .energized {
     text-opacity: 100%;
     color: green;
+    border: green;
 }
 
 .initialized {
     text-opacity: 100%;
     color: black;
+    border: black;
 }
 

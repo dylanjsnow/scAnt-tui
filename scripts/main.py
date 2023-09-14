@@ -53,6 +53,43 @@ class StepperMotor(Static):
         self.set_interval(1 / 60.0, self.update_is_moving)
         self.add_class("deenergized")
 
+    def update_initialized(self, event: Button.Pressed) -> None:
+        self.initialized = not self.initialized
+        for button in self.query(Button):
+            if button.id in ["energize_stepper", "deenergize_stepper"]:
+                button.disabled = not self.initialized
+        for input in self.query(Input):
+            if input.id in ["target_position_stepper", "max_value_stepper", "min_value_stepper"]:
+                input.disabled = not self.initialized
+        if self.initialized:
+            self.add_class("initialized")
+        else:
+            self.remove_class("initialized")
+            self.remove_class("energized")
+            self.remove_class("deenergized")
+        for select in self.query(Select):
+            if select.id in ["axis_stepper", "serial_stepper"]:
+                select.disabled = self.initialized
+
+    def update_energized(self, event: Button.Pressed) -> None:
+        self.remove_class("deenergized")
+        self.remove_class("initialized")
+        self.add_class("energized")
+        self.energized = True
+
+    def update_deenergized(self, event: Button.Pressed) -> None:
+        self.remove_class("energized")
+        self.remove_class("initialized")
+        self.add_class("deenergized")
+        self.energized = False
+
+    def update_target_position(self) -> None:
+        """Update the target position of the stepper motor"""
+        if self.energized:
+            self.target_position = 1
+        else:
+            self.target_position = 2
+
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
         if self.energized:
@@ -72,32 +109,11 @@ class StepperMotor(Static):
         print(self.id, " button pressed: ", event.button.id)
         
         if event.button.id == "initialize_stepper":
-            self.initialized = not self.initialized
-            for button in self.query(Button):
-                if button.id in ["energize_stepper", "deenergize_stepper"]:
-                    button.disabled = not self.initialized
-            for input in self.query(Input):
-                if input.id in ["target_position_stepper", "max_value_stepper", "min_value_stepper"]:
-                    input.disabled = not self.initialized
-            if self.initialized:
-                self.add_class("initialized")
-            else:
-                self.remove_class("initialized")
-                self.remove_class("energized")
-                self.remove_class("deenergized")
-            for select in self.query(Select):
-                if select.id in ["axis_stepper", "serial_stepper"]:
-                    select.disabled = self.initialized
+            self.update_initialized(event)
         elif event.button.id == "energize_stepper":
-            self.remove_class("deenergized")
-            self.remove_class("initialized")
-            self.add_class("energized")
-            self.energized = True
+            self.update_energized(event)
         elif event.button.id == "deenergize_stepper":
-            self.remove_class("energized")
-            self.remove_class("initialized")
-            self.add_class("deenergized")
-            self.energized = False
+            self.update_deenergized(event)
         
 
     @on(Slider.Changed)
