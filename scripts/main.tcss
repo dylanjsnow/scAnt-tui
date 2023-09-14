@@ -19,13 +19,18 @@ Slider {
 
 }
 
-.deenergized Slider {
-    border: red;
+.deenergized {
+    color: red;
     text-opacity: 50%;
 }
 
-
-.energized Slider {
+.energized {
     text-opacity: 100%;
-    border: green;
+    color: green;
 }
+
+.initialized {
+    text-opacity: 100%;
+    color: black;
+}
+
