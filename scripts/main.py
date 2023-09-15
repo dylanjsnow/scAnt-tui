@@ -113,6 +113,9 @@ class StepperMotor(Static):
         self.remove_class("initialized")
         self.add_class("energized")
         self.energized = True
+        self.tic.halt_and_set_position(self.current_position)
+        self.tic.energize()
+        self.tic.exit_safe_start()
 
 
     def update_deenergized(self, event: Button.Pressed) -> None:
@@ -120,6 +123,7 @@ class StepperMotor(Static):
         self.remove_class("initialized")
         self.add_class("deenergized")
         self.energized = False
+        self.tic.deenergize()
 
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
@@ -180,8 +184,8 @@ class StepperMotor(Static):
         yield Select(options=((serial, serial) for serial in self.serial_numbers), id="serial_stepper", value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "", allow_blank=False)
         yield Button("Start/ Stop", id="initialize_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="success", disabled=True)
-        yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
+        yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
         yield Label("Current position: ", id="current_position_label")
         yield Input(id="current_position_stepper", value=str(self.current_position), disabled=True)
         yield Label("Target position: ", id="target_position_label")
