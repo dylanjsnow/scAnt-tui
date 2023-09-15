@@ -26,6 +26,36 @@ def get_buttons_to_initialize():
     """Return a list of buttons that should be disabled until the stepper motor is initialized"""
     return ["energize_stepper", "deenergize_stepper", "zero_stepper", "plus_10_stepper", "plus_100_stepper", "minus_10_stepper", "minus_100_stepper"]
 
+class CurrentPositionDisplay(Static):
+    """A widget to display the current position"""
+    current_position = reactive(0)
+
+    def on_mount(self) -> None:
+        """Event handler called when widget is added to the app"""
+        pass
+
+    def watch_current_position(self) -> None:
+        """Automatically (via Textual) update listen for changes to current_position"""
+        self.update("Current position: " + str(self.current_position))
+
+    def update_current_position(self, new_position: float) -> None:
+        self.current_position = new_position
+
+class TargetPositionDisplay(Static):
+    """A widget to display the target position the stepper motor is moving to"""
+    target_position = reactive(0)
+
+    def on_mount(self) -> None:
+        """Event handler called when widget is added to the app"""
+        pass
+
+    def watch_target_position(self) -> None:
+        """Automatically (via Textual) update listen for changes to target_position"""
+        self.update("Target position: " + str(self.target_position))
+
+    def update_target_position(self, new_position: float) -> None:
+        self.target_position = new_position
+
 class StepperMotor(Static):
     """A stepper motor interface"""
 
@@ -47,7 +77,9 @@ class StepperMotor(Static):
         self.axis = ""
         self.serial_number = ""
         self.current_position = 0
+        self.query_one(CurrentPositionDisplay).current_position = self.current_position
         self.target_position = 0
+        self.query_one(TargetPositionDisplay).current_position = self.target_position
         self.max_value = 0
         self.min_value = 0
         self.home_position = 0
@@ -63,6 +95,7 @@ class StepperMotor(Static):
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
             self.current_position = self.tic.get_current_position()
+            self.query_one(CurrentPositionDisplay).current_position = self.current_position
             self.moving = self.tic.get_current_position() != self.tic.get_target_position()
             
         if self.moving:
@@ -72,6 +105,7 @@ class StepperMotor(Static):
     def watch_target_position(self) -> None:
         if self.tic and self.energized:
             self.tic.set_target_position(self.target_position)
+            self.query_one(TargetPositionDisplay).target_position = self.target_position
 
 
     def zero_stepper(self):
@@ -79,7 +113,9 @@ class StepperMotor(Static):
             self.tic.halt_and_set_position(0)
             self.tic.exit_safe_start()
             self.current_position = 0
+            self.query_one(CurrentPositionDisplay).current_position = self.current_position
             self.target_position = 0
+            self.query_one(TargetPositionDisplay).target_position = self.target_position
             self.max_value = 0
             self.min_value = 0
             self.home_position = 0
@@ -187,9 +223,9 @@ class StepperMotor(Static):
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
         yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
         yield Label("Current position: ", id="current_position_label")
-        yield Input(id="current_position_stepper", value=str(self.current_position), disabled=True)
+        yield CurrentPositionDisplay()
         yield Label("Target position: ", id="target_position_label")
-        yield Input(id="target_position_stepper", value=str(self.target_position), disabled=True)
+        yield TargetPositionDisplay()
         yield Label("Max value: ", id="max_value_label")
         yield Input(id="max_value_stepper", value=str(self.max_value), disabled=True)
         yield Label("Min value: ", id="min_value_label")
