@@ -1,12 +1,13 @@
 import subprocess
+import time
 
 from textual import on
 from textual import log
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Button, Static, Select, Label, Input
-from textual.containers import ScrollableContainer
+from textual.containers import ScrollableContainer, Vertical
 from textual.reactive import reactive
-from textual_slider import Slider
+from ticlib import TicUSB
 
 def get_stepper_motor_serial_numbers():
     print("Print out all current TIC stepper motors connected via USB")
@@ -20,6 +21,10 @@ def get_stepper_motor_serial_numbers():
 
 def get_axes():
     return ["X", "Y", "Z"]
+
+def get_buttons_to_initialize():
+    """Return a list of buttons that should be disabled until the stepper motor is initialized"""
+    return ["energize_stepper", "deenergize_stepper", "zero_stepper", "plus_10_stepper", "plus_100_stepper", "minus_10_stepper", "minus_100_stepper"]
 
 class StepperMotor(Static):
     """A stepper motor interface"""
@@ -36,6 +41,7 @@ class StepperMotor(Static):
     moving = reactive(False)
     energized = reactive(False)
     initialized = reactive(False)
+    tic = None
 
     def reset(self):
         self.axis = ""
@@ -49,27 +55,58 @@ class StepperMotor(Static):
 
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
-        self.set_interval(1 / 60.0, self.update_current_position)
-        self.set_interval(1 / 60.0, self.update_is_moving)
         self.add_class("deenergized")
+        self.serial_number = self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else ""
+        self.set_interval(1 / 10.0, self.watch_current_position)
+        self.set_interval(1 / 10.0, self.watch_target_position)
+
+    def watch_current_position(self) -> None:
+        if self.tic and self.energized:
+            self.current_position = self.tic.get_current_position()
+            self.moving = self.tic.get_current_position() != self.tic.get_target_position()
+            
+        if self.moving:
+            print(self.id, " current position: ", self.current_position)
+            print(self.id, " target position: ", self.target_position)
+
+    def watch_target_position(self) -> None:
+        if self.tic and self.energized:
+            self.tic.set_target_position(self.target_position)
+
+
+    def zero_stepper(self):
+        if self.tic and self.energized:
+            self.tic.halt_and_set_position(0)
+            self.tic.exit_safe_start()
+            self.current_position = 0
+            self.target_position = 0
+            self.max_value = 0
+            self.min_value = 0
+            self.home_position = 0
+            self.moving = False
 
     def update_initialized(self, event: Button.Pressed) -> None:
         self.initialized = not self.initialized
         for button in self.query(Button):
-            if button.id in ["energize_stepper", "deenergize_stepper"]:
+            if button.id in ["energize_stepper", "deenergize_stepper", "zero_stepper"]:
                 button.disabled = not self.initialized
         for input in self.query(Input):
             if input.id in ["target_position_stepper", "max_value_stepper", "min_value_stepper"]:
                 input.disabled = not self.initialized
         if self.initialized:
             self.add_class("initialized")
+            self.tic = TicUSB(serial_number=self.serial_number)
         else:
             self.remove_class("initialized")
             self.remove_class("energized")
             self.remove_class("deenergized")
+            self.energized = False
         for select in self.query(Select):
-            if select.id in ["axis_stepper", "serial_stepper"]:
+            if select.id in ["axis_stepper", "serial_stepper", "zero_stepper"]:
                 select.disabled = self.initialized
+        for button in self.query(Button):
+            if button.id in get_buttons_to_initialize():
+                button.disabled = not self.initialized     
 
     def update_energized(self, event: Button.Pressed) -> None:
         self.remove_class("deenergized")
@@ -77,18 +114,12 @@ class StepperMotor(Static):
         self.add_class("energized")
         self.energized = True
 
+
     def update_deenergized(self, event: Button.Pressed) -> None:
         self.remove_class("energized")
         self.remove_class("initialized")
         self.add_class("deenergized")
         self.energized = False
-
-    def update_target_position(self) -> None:
-        """Update the target position of the stepper motor"""
-        if self.energized:
-            self.target_position = 1
-        else:
-            self.target_position = 2
 
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
@@ -97,12 +128,21 @@ class StepperMotor(Static):
         else:
             self.moving = False
 
-    def update_current_position(self) -> None:
-        """Update the current position of the stepper motor"""
-        if self.energized:
-            self.current_position = 1
+    def update_target_position(self, event: Button.Pressed) -> None:
+        """Update the target position of the stepper motor"""
+        button_id = event.button.id
+
+        if button_id == "plus_10_stepper":
+            self.target_position += 10
+        elif button_id == "plus_100_stepper":
+            self.target_position += 100
+        elif button_id == "minus_10_stepper":
+            self.target_position -= 10
+        elif button_id == "minus_100_stepper":
+            self.target_position -= 100
         else:
-            self.current_position = 2
+            self.target_position = self.target_position
+        print(self.id, " target position: ", self.target_position)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle a button press"""
@@ -114,15 +154,12 @@ class StepperMotor(Static):
             self.update_energized(event)
         elif event.button.id == "deenergize_stepper":
             self.update_deenergized(event)
-        
+        elif event.button.id == "zero_stepper":
+            self.zero_stepper()
+        elif event.button.id in ["plus_10_stepper", "plus_100_stepper", "minus_10_stepper", "minus_100_stepper"]:
+            self.update_target_position(event)
+            
 
-    @on(Slider.Changed)
-    def on_slider_changed(self, event: Slider.Changed) -> None:
-        """Handle a slider change"""
-        print(self.id, " slider changed to: ", event.value)
-        if event.slider.id == "position_stepper":
-            self.target_position = event.value
-            print(self.id, " target position: ", self.target_position)
 
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -144,7 +181,7 @@ class StepperMotor(Static):
         yield Button("Start/ Stop", id="initialize_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="success", disabled=True)
         yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
-        yield Slider(0, 100, 50, id="position_stepper")
+        yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
         yield Label("Current position: ", id="current_position_label")
         yield Input(id="current_position_stepper", value=str(self.current_position), disabled=True)
         yield Label("Target position: ", id="target_position_label")
@@ -153,6 +190,10 @@ class StepperMotor(Static):
         yield Input(id="max_value_stepper", value=str(self.max_value), disabled=True)
         yield Label("Min value: ", id="min_value_label")
         yield Input(id="min_value_stepper", value=str(self.min_value), disabled=True)
+        yield Button("+10", id="plus_10_stepper", variant="primary", disabled=True)
+        yield Button("+100", id="plus_100_stepper", variant="primary", disabled=True)
+        yield Button("-10", id="minus_10_stepper", variant="primary", disabled=True)
+        yield Button("-100", id="minus_100_stepper", variant="primary", disabled=True)
 
 
 class Scant(App):
