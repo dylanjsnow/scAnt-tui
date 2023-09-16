@@ -1,6 +1,6 @@
 StepperMotor {
     layout: grid;
-    grid-size: 10 2;
+    grid-size: 12 2;
     background: $boost;
     height: 15;
     margin: 1;
