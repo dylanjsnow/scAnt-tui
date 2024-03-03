@@ -4,7 +4,7 @@ ScAnt Terminal User Interface
 
 A simplified version of the scAnt GUI, for use on an Ubuntu-based system. Runs directly in the terminal. Tested on Ubuntu 20.04 LTS.
 
-### Installation
+### Installation, Ubuntu
 
 1. Install the dependencies:
 ```
@@ -37,9 +37,21 @@ sudo adduser $USER dialout
 sudo adduser $USER plugdev
 ```
 
-
-
 ### Configuration
+
+#### WSL notes
+
+In addition to the below *Configure devices* section, WSL users can try:
+
+1. Install win-usbipd via Powershell Windows Package Manager, then run ([reference](https://github.com/dorssel/usbipd-win)):
+```powershell
+winget install usbipd
+usbipd list # Confirm the USB devices are plugged in and visible on the Windows Host e.g 3-1    1ffb:00bd  Pololu Tic T500 Not Shared
+usbipd bind --busid=<BUSID> # Do this for each Pololu Tic T500 USB devices and the Canon camera, may require administrator Powershell, until they are 'Shared'
+usbipd attach --wsl --busid=<BUSID> # Do this for each Pololu Tic T500 and Canon camera
+```
+
+#### Configure devices
 
 1. Plug-in the Pololu Tic500 stepper motors via USB or USB hub, and confirm they are detected by the system:
 ```bash
