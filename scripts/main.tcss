@@ -12,6 +12,32 @@ Button {
     width: 12;
 }
 
+Button#run_stepper {
+    width: 12;
+    text-style: bold;
+}
+
+Button#run_stepper.-disabled {
+    opacity: 0.3;
+}
+
+Button#run_stepper:hover {
+    background: $boost;
+    border: heavy $accent;
+}
+
+Button#run_stepper.-error {
+    background: $error;
+    color: $text;
+    border: heavy $error;
+}
+
+Button#run_stepper.-error:hover {
+    background: $error 90%;
+    color: $text;
+    border: heavy $error;
+}
+
 Slider {
     text-opacity: 20%;
     height: 3;

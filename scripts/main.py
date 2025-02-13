@@ -273,22 +273,8 @@ class StepperMotor(Static):
     def update_target_position(self, event: Button.Pressed) -> None:
         """Update the target position of the stepper motor"""
         button_id = event.button.id
-        current_pos = int(float(self.target_position))
-
-        if button_id == "plus_10_stepper":
-            self.target_position = current_pos + 10
-        elif button_id == "plus_100_stepper":
-            self.target_position = current_pos + 100
-        elif button_id == "plus_1000_stepper":
-            self.target_position = current_pos + 1000
-        elif button_id == "minus_10_stepper":
-            self.target_position = current_pos - 10
-        elif button_id == "minus_100_stepper":
-            self.target_position = current_pos - 100
-        elif button_id == "minus_1000_stepper":
-            self.target_position = current_pos - 1000
-        else:
-            self.target_position = current_pos
+        new_target_position = int(float(self.target_position))
+        self.target_position = new_target_position
         print(self.id, " target position: ", self.target_position)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -314,27 +300,31 @@ class StepperMotor(Static):
     @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle an input change"""
-        print(self.id, " input changed: ", event.value)
         if event.input.id == "divisions_stepper":
+            # Store the value even if empty
             self.divisions = event.value
-            # Update the division display when divisions change
-            self.query_one(DivisionDisplay).update_total_divisions(event.value)
+            # Only update progress if it's a valid number
+            if event.value and event.value.isdigit():
+                self.query_one(DivisionDisplay).update_total_divisions(event.value)
             print(self.id, " divisions: ", self.divisions)
-        if event.input.id == "max_position_stepper" and len(re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)) > 0: # Validate user entered number
-            self.max_position = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)[0]
+            
+        elif event.input.id == "max_position_stepper":
+            # Extract number if present, otherwise store empty string
+            numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
+            self.max_position = numbers[0] if numbers else ""
             self.query_one(MaxPositionDisplay).max_position = self.max_position
             print(self.id, " max position: ", self.max_position)
-        else:
-            self.max_position = "0"
-            print(self.id, " max position: ", self.max_position)
-        if event.input.id == "min_position_stepper" and len(re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)) > 0:
-            self.min_position = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)[0]
+            
+        elif event.input.id == "min_position_stepper":
+            # Extract number if present, otherwise store empty string
+            numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
+            self.min_position = numbers[0] if numbers else ""
             self.query_one(MinPositionDisplay).min_position = self.min_position
             print(self.id, " min position: ", self.min_position)
-        else:
-            self.min_position = "0"
-            print(self.id, " min position: ", self.min_position)
-            
+        
+        # Always update Run button state after any input change
+        run_button = self.query_one("#run_stepper")
+        run_button.disabled = not self.validate_scan_parameters()
 
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -455,6 +445,13 @@ class StepperMotor(Static):
         if self._wait_timer:
             self._wait_timer.stop()
             self._wait_timer = None
+        
+        # Halt the motor at current position
+        if self.tic and self.energized:
+            current_pos = self.tic.get_current_position()
+            self.tic.halt_and_set_position(current_pos)
+            self.tic.exit_safe_start()
+            self.target_position = current_pos
             
         self.scan_state = ScanState.IDLE
         self.current_division = 0
@@ -465,25 +462,37 @@ class StepperMotor(Static):
         """Handle scan state changes"""
         run_button = self.query_one("#run_stepper")
         if self.scan_state != ScanState.IDLE:
-            run_button.label = "Stop"
+            run_button.label = "STOP"
             run_button.variant = "error"
+            run_button.disabled = False  # Always enable STOP
         else:
             run_button.label = "Run"
             run_button.variant = "success"
+            # Only enable if parameters are valid
+            run_button.disabled = not self.validate_scan_parameters()
 
     def validate_scan_parameters(self) -> bool:
         """Check if all parameters are valid for scanning"""
         try:
+            # Check if values exist and are numeric
+            if not self.divisions or not self.divisions.strip():
+                return False
+            if not self.min_position or not str(self.min_position).strip():
+                return False
+            if not self.max_position or not str(self.max_position).strip():
+                return False
+                
             min_pos = float(self.min_position)
             max_pos = float(self.max_position)
             divisions = int(self.divisions)
+            
             return (
                 self.energized and 
                 self.initialized and 
                 divisions > 0 and 
                 max_pos > min_pos
             )
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, AttributeError):
             return False
 
     def on_unmount(self) -> None:
