@@ -507,7 +507,7 @@ class StepperMotor(Static):
             return
             
         # Initialize scan
-        self.current_division = 0
+        self.current_division = 0  # Reset division counter when starting new scan
         current_pos = self.current_position
         target_pos = positions[0]
         self.target_position = target_pos
@@ -535,9 +535,16 @@ class StepperMotor(Static):
             self.target_position = current_pos
             
         self.scan_state = ScanState.IDLE
-        self.current_division = 0
+        # Don't reset current_division here to allow "Done" state to show
         progress = self.query_one(DivisionDisplay)
-        progress.update_progress(0, 0, 0, 0)
+        positions = self.get_division_positions()
+        total_divisions = len(positions) if positions else 0
+        progress.update_progress(
+            self.current_division, 
+            total_divisions,
+            self.current_position, 
+            self.target_position
+        )
 
     def update_button_state(self) -> None:
         """Update run button state after widgets are mounted"""
@@ -552,15 +559,28 @@ class StepperMotor(Static):
         """Handle scan state changes"""
         try:
             run_button = self.query_one("#run_stepper")
-            if self.scan_state != ScanState.IDLE:
-                run_button.label = "STOP"
-                run_button.variant = "error"
-                run_button.disabled = False  # Always enable STOP
-            else:
-                run_button.label = "Run"
-                run_button.variant = "success"
+            
+            # Update button label and style based on scan state
+            if self.scan_state == ScanState.IDLE:
+                if self.current_division > 0:  # Scan completed
+                    run_button.label = "Done"
+                    run_button.variant = "primary"
+                else:  # Ready to start
+                    run_button.label = "Scan"
+                    run_button.variant = "success"
                 # Only enable if parameters are valid
                 run_button.disabled = not self.validate_scan_parameters()
+            
+            elif self.scan_state == ScanState.MOVING:
+                run_button.label = "Scanning"
+                run_button.variant = "warning"
+                run_button.disabled = False  # Always enable stop
+            
+            elif self.scan_state == ScanState.WAITING:
+                run_button.label = "Waiting"
+                run_button.variant = "warning"
+                run_button.disabled = False  # Always enable stop
+            
         except:
             # Button might not be mounted yet, that's ok
             pass
