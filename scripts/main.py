@@ -1,6 +1,7 @@
 import re
 import subprocess
 import time
+from enum import Enum
 
 from textual import on
 from textual import log
@@ -9,6 +10,7 @@ from textual.widgets import Footer, Header, Button, Static, Select, Label, Input
 from textual.containers import ScrollableContainer, Vertical
 from textual.reactive import reactive
 from ticlib import TicUSB
+from textual.worker import Worker, get_current_worker
 
 def get_stepper_motor_serial_numbers():
     print("Print out all current TIC stepper motors connected via USB")
@@ -131,6 +133,12 @@ class DivisionDisplay(ProgressBar):
         else:
             self.update(total=0)
 
+class ScanState(Enum):
+    """States for the scanning process"""
+    IDLE = "idle"
+    MOVING = "moving" 
+    WAITING = "waiting"
+
 class StepperMotor(Static):
     """A stepper motor interface"""
     axes = get_axes()
@@ -146,6 +154,12 @@ class StepperMotor(Static):
     initialized = reactive(False)
     divisions = reactive(0) # How many divisions (between maximum and minimum position) to take photos
     tic = None # USB connection to the stepper motor
+    scanning = reactive(False)  # Track if we're currently scanning
+    scan_state = reactive(ScanState.IDLE)
+    current_division = reactive(0)
+    POSITION_TOLERANCE = 0.05  # 5% tolerance for position matching
+    DIVISION_WAIT_TIME = 2.0  # Seconds to wait at each division
+    _wait_timer = None  # Store reference to active timer
 
     def reset(self):
         self.axis = ""
@@ -166,6 +180,8 @@ class StepperMotor(Static):
         self.serial_number = self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else ""
         self.set_interval(1 / 10.0, self.watch_current_position)
         self.set_interval(1 / 10.0, self.watch_target_position)
+        # Add interval for scan state machine
+        self.set_interval(0.1, self.update_scan_state)
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -178,8 +194,11 @@ class StepperMotor(Static):
             print(self.id, " target position: ", self.target_position)
 
     def watch_target_position(self) -> None:
+        """Watch for target position changes and update motor"""
         if self.tic and self.energized:
-            self.tic.set_target_position(self.target_position)
+            # Convert target position to integer before sending to motor
+            target_pos = int(float(self.target_position))
+            self.tic.set_target_position(target_pos)
             self.query_one(TargetPositionDisplay).target_position = self.target_position
             if self.target_position > float(self.max_position) and \
                 len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MaxPositionDisplay).max_position))) <= 0:
@@ -221,7 +240,7 @@ class StepperMotor(Static):
             if select.id in ["axis_stepper", "serial_stepper", "zero_stepper", "divisions_stepper"]:
                 select.disabled = self.initialized
         for button in self.query(Button):
-            if button.id in get_buttons_to_initialize():
+            if button.id in get_buttons_to_initialize() + ["run_stepper"]:
                 button.disabled = not self.initialized 
         for input in self.query(Input):
             if input.id in get_inputs_to_initialize():
@@ -254,21 +273,22 @@ class StepperMotor(Static):
     def update_target_position(self, event: Button.Pressed) -> None:
         """Update the target position of the stepper motor"""
         button_id = event.button.id
+        current_pos = int(float(self.target_position))
 
         if button_id == "plus_10_stepper":
-            self.target_position += 10
+            self.target_position = current_pos + 10
         elif button_id == "plus_100_stepper":
-            self.target_position += 100
+            self.target_position = current_pos + 100
         elif button_id == "plus_1000_stepper":
-            self.target_position += 1000
+            self.target_position = current_pos + 1000
         elif button_id == "minus_10_stepper":
-            self.target_position -= 10
+            self.target_position = current_pos - 10
         elif button_id == "minus_100_stepper":
-            self.target_position -= 100
+            self.target_position = current_pos - 100
         elif button_id == "minus_1000_stepper":
-            self.target_position -= 1000
+            self.target_position = current_pos - 1000
         else:
-            self.target_position = self.target_position
+            self.target_position = current_pos
         print(self.id, " target position: ", self.target_position)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -283,6 +303,11 @@ class StepperMotor(Static):
             self.update_deenergized(event)
         elif event.button.id == "zero_stepper":
             self.zero_stepper()
+        elif event.button.id == "run_stepper":
+            if self.scan_state == ScanState.IDLE:
+                self.start_scan()
+            else:
+                self.stop_scan()
         elif event.button.id in get_target_position_buttons():
             self.update_target_position(event)
             
@@ -336,13 +361,137 @@ class StepperMotor(Static):
         yield TargetPositionDisplay()
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
-        yield Static()
-        yield Static()
+        yield Button("Run", id="run_stepper", variant="success", disabled=True)
+        yield Input(placeholder="Divisions: ", id="divisions_stepper", disabled=True)
         yield Input(placeholder="Set min: ", id="min_position_stepper", disabled=True)
         yield Input(placeholder="Set max: ", id="max_position_stepper", disabled=True)
-        yield Input(placeholder="Divisions: ", id="divisions_stepper", disabled=True)
         yield DivisionDisplay()
 
+    def get_division_positions(self) -> list[int]:
+        """Calculate all positions to stop at during scan, returning integer positions"""
+        try:
+            min_pos = int(float(self.min_position))
+            max_pos = int(float(self.max_position))
+            div_count = int(self.divisions)
+            if div_count < 2:
+                return [min_pos, max_pos]
+            
+            # Calculate step size, rounding to nearest integer
+            step = int((max_pos - min_pos) / (div_count - 1))
+            return [min_pos + (i * step) for i in range(div_count)]
+        except (ValueError, TypeError):
+            return []
+
+    def is_position_reached(self) -> bool:
+        """Check if current position is within tolerance of target"""
+        if not self.energized or not self.tic:
+            return False
+        
+        current_pos = int(float(self.current_position))
+        target_pos = int(float(self.target_position))
+        tolerance = abs(int(target_pos * self.POSITION_TOLERANCE))
+        return abs(current_pos - target_pos) <= tolerance
+
+    def update_scan_state(self) -> None:
+        """Update the scanning state machine"""
+        if self.scan_state == ScanState.IDLE:
+            return
+
+        positions = self.get_division_positions()
+        if not positions:
+            self.scan_state = ScanState.IDLE
+            return
+
+        if self.scan_state == ScanState.MOVING:
+            if self.is_position_reached():
+                self.scan_state = ScanState.WAITING
+                # Create and store timer reference
+                self._wait_timer = self.set_timer(self.DIVISION_WAIT_TIME, self.finish_waiting)
+                
+        elif self.scan_state == ScanState.WAITING:
+            # Waiting is handled by finish_waiting callback
+            pass
+
+    def finish_waiting(self) -> None:
+        """Called after waiting at a position"""
+        if self.scan_state != ScanState.WAITING:
+            return
+            
+        positions = self.get_division_positions()
+        self.current_division += 1
+        
+        # Update progress
+        progress = self.query_one(DivisionDisplay)
+        progress.update(progress=self.current_division)
+
+        # Move to next position or finish
+        if self.current_division >= len(positions):
+            self.stop_scan()
+        else:
+            self.target_position = positions[self.current_division]
+            self.scan_state = ScanState.MOVING
+
+    def start_scan(self) -> None:
+        """Start the scanning sequence"""
+        if not self.validate_scan_parameters():
+            return
+            
+        positions = self.get_division_positions()
+        if not positions:
+            return
+            
+        # Initialize scan
+        self.current_division = 0
+        self.target_position = positions[0]
+        progress = self.query_one(DivisionDisplay)
+        progress.update(total=len(positions), progress=0)
+        
+        # Start state machine
+        self.scan_state = ScanState.MOVING
+
+    def stop_scan(self) -> None:
+        """Stop the scanning sequence"""
+        # Stop any active wait timer
+        if self._wait_timer:
+            self._wait_timer.stop()
+            self._wait_timer = None
+            
+        self.scan_state = ScanState.IDLE
+        self.current_division = 0
+        progress = self.query_one(DivisionDisplay)
+        progress.update(progress=0)
+
+    def watch_scan_state(self) -> None:
+        """Handle scan state changes"""
+        run_button = self.query_one("#run_stepper")
+        if self.scan_state != ScanState.IDLE:
+            run_button.label = "Stop"
+            run_button.variant = "error"
+        else:
+            run_button.label = "Run"
+            run_button.variant = "success"
+
+    def validate_scan_parameters(self) -> bool:
+        """Check if all parameters are valid for scanning"""
+        try:
+            min_pos = float(self.min_position)
+            max_pos = float(self.max_position)
+            divisions = int(self.divisions)
+            return (
+                self.energized and 
+                self.initialized and 
+                divisions > 0 and 
+                max_pos > min_pos
+            )
+        except (ValueError, TypeError):
+            return False
+
+    def on_unmount(self) -> None:
+        """Clean up when widget is removed"""
+        # Stop any active timer
+        if self._wait_timer:
+            self._wait_timer.stop()
+            self._wait_timer = None
 
 class Scant(App):
     """The main application."""
