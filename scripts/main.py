@@ -11,6 +11,8 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.reactive import reactive
 from ticlib import TicUSB
 from textual.worker import Worker, get_current_worker
+from textual.timer import Timer
+from rich.progress import Progress
 
 def get_stepper_motor_serial_numbers():
     print("Print out all current TIC stepper motors connected via USB")
@@ -113,25 +115,77 @@ class CurrentLimitDisplay(Static):
         self.current_limit = new_limit
 
 class DivisionDisplay(ProgressBar):
-    """A widget to display division progress using a progress bar"""
+    """A widget to display division and position progress using a progress bar"""
     
     def __init__(self, *args, **kwargs):
         super().__init__(
-            total=0,  # Start with 0 divisions
-            show_bar=False,  # Don't show the progress bar itself
-            show_percentage=True,  # Show percentage
-            show_eta=False,  # Don't show ETA
-            name="division_display",  # Widget name
-            disabled=True,  # Start disabled
-            clock=0  # Set clock to 0
+            total=100,  # Use percentage for total
+            show_bar=True,
+            show_percentage=True,
+            show_eta=True,
+            name="division_display",
+            id="division_display"
         )
+        self.total_divisions = 0
+        self.current_division = 0
+        self.current_position = 0
+        self.target_position = 0
+        self.start_position = 0  # Track start position of current movement
+        self.position_tolerance = 0.05
 
-    def update_total_divisions(self, divisions: int) -> None:
+    def update_progress(self, current_division: int, total_divisions: int, 
+                       current_pos: float, target_pos: float, wait_time: float = 2.0) -> None:
+        """Update progress based on both division and position progress"""
+        self.total_divisions = max(1, total_divisions)
+        self.current_division = current_division
+        self.current_position = float(current_pos)
+        self.target_position = float(target_pos)
+        
+        # Base progress from completed divisions
+        division_progress = (self.current_division / self.total_divisions) * 100
+        
+        # Calculate progress within current division
+        if self.current_division < self.total_divisions:
+            # Calculate position progress as percentage of total movement
+            total_movement = abs(self.target_position - self.start_position)
+            if total_movement > 0:
+                remaining_movement = abs(self.target_position - self.current_position)
+                position_progress = ((total_movement - remaining_movement) / total_movement)
+            else:
+                position_progress = 1.0
+                
+            # Each division contributes an equal percentage to total progress
+            division_contribution = 100.0 / self.total_divisions
+            current_division_progress = position_progress * division_contribution
+            
+            # Combine base progress with current division progress
+            total_progress = division_progress + current_division_progress
+        else:
+            total_progress = 100.0
+            
+        # Debug output
+        print(f"Progress: {total_progress:.1f}% (Division {self.current_division}/{self.total_divisions}, "
+              f"Position: {self.current_position:.1f}/{self.target_position:.1f})")
+        
+        self.update(progress=min(100, max(0, total_progress)))
+
+    def start_new_movement(self, start_pos: float, target_pos: float) -> None:
+        """Called when starting movement to a new position"""
+        self.start_position = float(start_pos)
+        self.target_position = float(target_pos)
+
+    def update_total_divisions(self, divisions: str) -> None:
         """Update the total number of divisions"""
         if divisions and divisions.isdigit():
-            self.update(total=int(divisions))
+            self.total_divisions = int(divisions)
         else:
-            self.update(total=0)
+            self.total_divisions = 0
+
+    def reset(self) -> None:
+        """Reset the progress tracking"""
+        self.current_division = 0
+        self.start_position = 0
+        self.update(progress=0)
 
 class ScanState(Enum):
     """States for the scanning process"""
@@ -182,6 +236,8 @@ class StepperMotor(Static):
         self.set_interval(1 / 10.0, self.watch_target_position)
         # Add interval for scan state machine
         self.set_interval(0.1, self.update_scan_state)
+        # Defer button state update to allow widgets to mount
+        self.set_timer(0.1, self.update_button_state)
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -200,15 +256,25 @@ class StepperMotor(Static):
             target_pos = int(float(self.target_position))
             self.tic.set_target_position(target_pos)
             self.query_one(TargetPositionDisplay).target_position = self.target_position
-            if self.target_position > float(self.max_position) and \
-                len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MaxPositionDisplay).max_position))) <= 0:
-                self.max_position = self.target_position
-                self.query_one(MaxPositionDisplay).max_position = self.max_position
-            # Only set the min position if no user Input Min Position has been set in the GUI
-            if self.target_position < float(self.min_position) and \
-                len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MinPositionDisplay).min_position))) <= 0:
+            
+            try:
+                max_pos = float(self.max_position) if self.max_position else 0
+                min_pos = float(self.min_position) if self.min_position else 0
+                
+                # Update max position if needed
+                if self.target_position > max_pos and \
+                    len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MaxPositionDisplay).max_position))) <= 0:
+                    self.max_position = self.target_position
+                    self.query_one(MaxPositionDisplay).max_position = self.max_position
+                
+                # Only set the min position if no user Input Min Position has been set in the GUI
+                if self.target_position < min_pos and \
+                    len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MinPositionDisplay).min_position))) <= 0:
                     self.min_position = self.target_position
                     self.query_one(MinPositionDisplay).min_position = self.min_position
+            except (ValueError, TypeError):
+                # If conversion fails, just continue without updating min/max
+                pass
 
     def zero_stepper(self):
         if self.tic and self.energized:
@@ -382,6 +448,27 @@ class StepperMotor(Static):
         tolerance = abs(int(target_pos * self.POSITION_TOLERANCE))
         return abs(current_pos - target_pos) <= tolerance
 
+    def finish_waiting(self) -> None:
+        """Called after waiting at a position"""
+        if self.scan_state != ScanState.WAITING:
+            return
+            
+        positions = self.get_division_positions()
+        self.current_division += 1
+        
+        if self.current_division >= len(positions):
+            self.stop_scan()
+        else:
+            # Start new movement
+            current_pos = self.current_position
+            target_pos = positions[self.current_division]
+            self.target_position = target_pos
+            
+            # Update progress tracking
+            progress = self.query_one(DivisionDisplay)
+            progress.start_new_movement(current_pos, target_pos)
+            self.scan_state = ScanState.MOVING
+
     def update_scan_state(self) -> None:
         """Update the scanning state machine"""
         if self.scan_state == ScanState.IDLE:
@@ -392,34 +479,23 @@ class StepperMotor(Static):
             self.scan_state = ScanState.IDLE
             return
 
+        # Update progress display
+        progress_display = self.query_one(DivisionDisplay)
+        progress_display.update_progress(
+            self.current_division,
+            len(positions),
+            self.current_position,
+            self.target_position,
+            wait_time=self.DIVISION_WAIT_TIME
+        )
+
         if self.scan_state == ScanState.MOVING:
             if self.is_position_reached():
                 self.scan_state = ScanState.WAITING
-                # Create and store timer reference
                 self._wait_timer = self.set_timer(self.DIVISION_WAIT_TIME, self.finish_waiting)
-                
         elif self.scan_state == ScanState.WAITING:
             # Waiting is handled by finish_waiting callback
             pass
-
-    def finish_waiting(self) -> None:
-        """Called after waiting at a position"""
-        if self.scan_state != ScanState.WAITING:
-            return
-            
-        positions = self.get_division_positions()
-        self.current_division += 1
-        
-        # Update progress
-        progress = self.query_one(DivisionDisplay)
-        progress.update(progress=self.current_division)
-
-        # Move to next position or finish
-        if self.current_division >= len(positions):
-            self.stop_scan()
-        else:
-            self.target_position = positions[self.current_division]
-            self.scan_state = ScanState.MOVING
 
     def start_scan(self) -> None:
         """Start the scanning sequence"""
@@ -432,9 +508,14 @@ class StepperMotor(Static):
             
         # Initialize scan
         self.current_division = 0
-        self.target_position = positions[0]
+        current_pos = self.current_position
+        target_pos = positions[0]
+        self.target_position = target_pos
+        
+        # Reset progress display with initial movement info
         progress = self.query_one(DivisionDisplay)
-        progress.update(total=len(positions), progress=0)
+        progress.start_new_movement(current_pos, target_pos)
+        progress.update_progress(0, len(positions), current_pos, target_pos)
         
         # Start state machine
         self.scan_state = ScanState.MOVING
@@ -456,20 +537,33 @@ class StepperMotor(Static):
         self.scan_state = ScanState.IDLE
         self.current_division = 0
         progress = self.query_one(DivisionDisplay)
-        progress.update(progress=0)
+        progress.update_progress(0, 0, 0, 0)
+
+    def update_button_state(self) -> None:
+        """Update run button state after widgets are mounted"""
+        try:
+            run_button = self.query_one("#run_stepper")
+            run_button.disabled = not self.validate_scan_parameters()
+        except:
+            # Button might not be mounted yet, that's ok
+            pass
 
     def watch_scan_state(self) -> None:
         """Handle scan state changes"""
-        run_button = self.query_one("#run_stepper")
-        if self.scan_state != ScanState.IDLE:
-            run_button.label = "STOP"
-            run_button.variant = "error"
-            run_button.disabled = False  # Always enable STOP
-        else:
-            run_button.label = "Run"
-            run_button.variant = "success"
-            # Only enable if parameters are valid
-            run_button.disabled = not self.validate_scan_parameters()
+        try:
+            run_button = self.query_one("#run_stepper")
+            if self.scan_state != ScanState.IDLE:
+                run_button.label = "STOP"
+                run_button.variant = "error"
+                run_button.disabled = False  # Always enable STOP
+            else:
+                run_button.label = "Run"
+                run_button.variant = "success"
+                # Only enable if parameters are valid
+                run_button.disabled = not self.validate_scan_parameters()
+        except:
+            # Button might not be mounted yet, that's ok
+            pass
 
     def validate_scan_parameters(self) -> bool:
         """Check if all parameters are valid for scanning"""
