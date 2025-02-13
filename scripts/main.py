@@ -1,10 +1,11 @@
+import re
 import subprocess
 import time
 
 from textual import on
 from textual import log
 from textual.app import App, ComposeResult
-from textual.widgets import Footer, Header, Button, Static, Select, Label, Input
+from textual.widgets import Footer, Header, Button, Static, Select, Label, Input, ProgressBar
 from textual.containers import ScrollableContainer, Vertical
 from textual.reactive import reactive
 from ticlib import TicUSB
@@ -30,9 +31,9 @@ def get_buttons_to_initialize():
     """Return a list of buttons that should be disabled until the stepper motor is initialized"""
     return ["energize_stepper", "deenergize_stepper", "zero_stepper"] + get_target_position_buttons()
 
-def get_current_limits():
-    """Return a list of current limits"""
-    pass
+def get_inputs_to_initialize():
+    """Return a list of inputs that should be disabled until the stepper motor is initialized"""
+    return ["divisions_stepper", "max_position_stepper", "min_position_stepper"]
 
 class CurrentPositionDisplay(Static):
     """A widget to display the current position"""
@@ -109,6 +110,27 @@ class CurrentLimitDisplay(Static):
     def update_current_limit(self, new_limit: float) -> None:
         self.current_limit = new_limit
 
+class DivisionDisplay(ProgressBar):
+    """A widget to display division progress using a progress bar"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            total=0,  # Start with 0 divisions
+            show_bar=False,  # Don't show the progress bar itself
+            show_percentage=True,  # Show percentage
+            show_eta=False,  # Don't show ETA
+            name="division_display",  # Widget name
+            disabled=True,  # Start disabled
+            clock=0  # Set clock to 0
+        )
+
+    def update_total_divisions(self, divisions: int) -> None:
+        """Update the total number of divisions"""
+        if divisions and divisions.isdigit():
+            self.update(total=int(divisions))
+        else:
+            self.update(total=0)
+
 class StepperMotor(Static):
     """A stepper motor interface"""
     axes = get_axes()
@@ -159,12 +181,15 @@ class StepperMotor(Static):
         if self.tic and self.energized:
             self.tic.set_target_position(self.target_position)
             self.query_one(TargetPositionDisplay).target_position = self.target_position
-            if self.target_position > self.max_position:
+            if self.target_position > float(self.max_position) and \
+                len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MaxPositionDisplay).max_position))) <= 0:
                 self.max_position = self.target_position
                 self.query_one(MaxPositionDisplay).max_position = self.max_position
-            if self.target_position < self.min_position:
-                self.min_position = self.target_position
-                self.query_one(MinPositionDisplay).min_position = self.min_position
+            # Only set the min position if no user Input Min Position has been set in the GUI
+            if self.target_position < float(self.min_position) and \
+                len(re.findall(r"[-+]?(?:\d*\.*\d+)", str(self.query_one(MinPositionDisplay).min_position))) <= 0:
+                    self.min_position = self.target_position
+                    self.query_one(MinPositionDisplay).min_position = self.min_position
 
     def zero_stepper(self):
         if self.tic and self.energized:
@@ -197,7 +222,10 @@ class StepperMotor(Static):
                 select.disabled = self.initialized
         for button in self.query(Button):
             if button.id in get_buttons_to_initialize():
-                button.disabled = not self.initialized     
+                button.disabled = not self.initialized 
+        for input in self.query(Input):
+            if input.id in get_inputs_to_initialize():
+                input.disabled = not self.initialized       
 
     def update_energized(self, event: Button.Pressed) -> None:
         self.remove_class("deenergized")
@@ -264,6 +292,24 @@ class StepperMotor(Static):
         print(self.id, " input changed: ", event.value)
         if event.input.id == "divisions_stepper":
             self.divisions = event.value
+            # Update the division display when divisions change
+            self.query_one(DivisionDisplay).update_total_divisions(event.value)
+            print(self.id, " divisions: ", self.divisions)
+        if event.input.id == "max_position_stepper" and len(re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)) > 0: # Validate user entered number
+            self.max_position = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)[0]
+            self.query_one(MaxPositionDisplay).max_position = self.max_position
+            print(self.id, " max position: ", self.max_position)
+        else:
+            self.max_position = "0"
+            print(self.id, " max position: ", self.max_position)
+        if event.input.id == "min_position_stepper" and len(re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)) > 0:
+            self.min_position = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)[0]
+            self.query_one(MinPositionDisplay).min_position = self.min_position
+            print(self.id, " min position: ", self.min_position)
+        else:
+            self.min_position = "0"
+            print(self.id, " min position: ", self.min_position)
+            
 
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
@@ -278,11 +324,11 @@ class StepperMotor(Static):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the stepper motor, with a top row of changeable variables and a bottom row of fixed values"""
-        yield Label("Axis: ", id="axis_label")
         yield Select(options=((axis, axis) for axis in self.axes), id="axis_stepper", value=self.axes[int(self.id.split("_")[-1]) - 1], allow_blank=False)
-        yield Label("Serial: ", id="serial_label")
         yield Select(options=((serial, serial) for serial in self.serial_numbers), id="serial_stepper", value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "", allow_blank=False)
-        yield Button("Start/ Stop", id="initialize_stepper", variant="default")
+        yield Static()
+        yield Static()
+        yield Button("Enable/ Disable", id="initialize_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="success", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
         yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
@@ -290,16 +336,12 @@ class StepperMotor(Static):
         yield TargetPositionDisplay()
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
-        yield Button("+1000", id="plus_1000_stepper", variant="primary", disabled=True)
-        yield Button("+100", id="plus_100_stepper", variant="primary", disabled=True)
-        yield Button("+10", id="plus_10_stepper", variant="primary", disabled=True)
-        yield Button("-10", id="minus_10_stepper", variant="primary", disabled=True)
-        yield Button("-100", id="minus_100_stepper", variant="primary", disabled=True)
-        yield Button("-1000", id="minus_1000_stepper", variant="primary", disabled=True)
-        yield Label("Divisions: ", id="photo_divisions_label")
-        yield Input(placeholder="Divisions", id="divisions_stepper", disabled=True)
+        yield Static()
+        yield Static()
+        yield Input(placeholder="Set min: ", id="min_position_stepper", disabled=True)
         yield Input(placeholder="Set max: ", id="max_position_stepper", disabled=True)
-        yield Input(placeholder="Set min: ", id="min_position_stepper",  disabled=True)
+        yield Input(placeholder="Divisions: ", id="divisions_stepper", disabled=True)
+        yield DivisionDisplay()
 
 
 class Scant(App):
