@@ -68,6 +68,9 @@ Slider {
     width: 100%;
     margin: 0;
     padding: 0;
+    row-span: 4;
+    column-span: 2;
+
 }
 
 #division_display > .bar--bar {

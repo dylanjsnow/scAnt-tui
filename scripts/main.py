@@ -25,15 +25,11 @@ def get_stepper_motor_serial_numbers():
     return motor_serial_numbers
 
 def get_axes():
-    return ["X", "Y", "Z"]
-
-def get_target_position_buttons():
-    """Return the buttons that can be used to change the target position"""
-    return ["plus_10_stepper", "plus_100_stepper", "plus_1000_stepper", "minus_10_stepper", "minus_100_stepper", "minus_1000_stepper"]
+    return ["Forward", "Tilt", "Yaw"] # A.k.a Forward, Pitch, Heading (planes) or Z direction, X, Y (camera calibration computer vision)
 
 def get_buttons_to_initialize():
     """Return a list of buttons that should be disabled until the stepper motor is initialized"""
-    return ["energize_stepper", "deenergize_stepper", "zero_stepper"] + get_target_position_buttons()
+    return ["run_stepper"]
 
 def get_inputs_to_initialize():
     """Return a list of inputs that should be disabled until the stepper motor is initialized"""
@@ -306,7 +302,7 @@ class StepperMotor(Static):
             if select.id in ["axis_stepper", "serial_stepper", "zero_stepper", "divisions_stepper"]:
                 select.disabled = self.initialized
         for button in self.query(Button):
-            if button.id in get_buttons_to_initialize() + ["run_stepper"]:
+            if button.id in get_buttons_to_initialize():
                 button.disabled = not self.initialized 
         for input in self.query(Input):
             if input.id in get_inputs_to_initialize():
@@ -409,19 +405,19 @@ class StepperMotor(Static):
         yield Select(options=((serial, serial) for serial in self.serial_numbers), id="serial_stepper", value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "", allow_blank=False)
         yield Static()
         yield Static()
-        yield Button("Enable/ Disable", id="initialize_stepper", variant="default")
-        yield Button("Energize", id="energize_stepper", variant="success", disabled=True)
+        yield Button("Initialize", id="initialize_stepper", variant="default")
+        yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
         yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
         yield CurrentPositionDisplay()
         yield TargetPositionDisplay()
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
-        yield Button("Run", id="run_stepper", variant="success", disabled=True)
+        yield Button("Scan", id="run_stepper", variant="success", disabled=True)
         yield Input(placeholder="Divisions: ", id="divisions_stepper", disabled=True)
         yield Input(placeholder="Set min: ", id="min_position_stepper", disabled=True)
         yield Input(placeholder="Set max: ", id="max_position_stepper", disabled=True)
-        yield DivisionDisplay()
+        yield DivisionDisplay(id="division_display")
 
     def get_division_positions(self) -> list[int]:
         """Calculate all positions to stop at during scan, returning integer positions"""
@@ -563,8 +559,8 @@ class StepperMotor(Static):
             # Update button label and style based on scan state
             if self.scan_state == ScanState.IDLE:
                 if self.current_division > 0:  # Scan completed
-                    run_button.label = "Done"
-                    run_button.variant = "primary"
+                    run_button.label = "Done/ Re-Scan"
+                    run_button.variant = "success"
                 else:  # Ready to start
                     run_button.label = "Scan"
                     run_button.variant = "success"
