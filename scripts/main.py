@@ -321,6 +321,10 @@ class StepperMotor(Static):
         if not self.tic or not self.energized:
             return
             
+        # If a scan is running, stop it first
+        if self.scan_state != ScanState.IDLE:
+            self.stop_scan()
+            
         # First move to position 0
         self.target_position = 0
         self.query_one(TargetPositionDisplay).target_position = self.target_position
