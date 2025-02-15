@@ -38,13 +38,6 @@ Button#run_stepper.-error:hover {
     border: heavy $error;
 }
 
-Slider {
-    text-opacity: 20%;
-    height: 3;
-    column-span: 3;
-
-}
-
 .deenergized {
     color: red;
     text-opacity: 50%;
@@ -64,10 +57,10 @@ Slider {
 }
 
 #division_display {
-    height: 20;
+    height: 100%;
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding: 1 2;
     row-span: 4;
     column-span: 2;
 

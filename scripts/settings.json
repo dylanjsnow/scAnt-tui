@@ -1,0 +1,17 @@
+{
+    "stepper_1": {
+        "divisions": "12",
+        "min_position": "-20",
+        "max_position": "40"
+    },
+    "stepper_2": {
+        "divisions": "5",
+        "min_position": "0",
+        "max_position": "100"
+    },
+    "stepper_3": {
+        "divisions": "8",
+        "min_position": "-50",
+        "max_position": "50"
+    }
+}

@@ -2,6 +2,11 @@ import re
 import subprocess
 import time
 from enum import Enum
+import json
+import os
+from pathlib import Path
+from threading import Thread
+from queue import Queue
 
 from textual import on
 from textual import log
@@ -211,6 +216,10 @@ class StepperMotor(Static):
     DIVISION_WAIT_TIME = 2.0  # Seconds to wait at each division
     _wait_timer = None  # Store reference to active timer
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.settings = SettingsManager()
+
     def reset(self):
         self.axis = ""
         self.serial_number = ""
@@ -234,6 +243,22 @@ class StepperMotor(Static):
         self.set_interval(0.1, self.update_scan_state)
         # Defer button state update to allow widgets to mount
         self.set_timer(0.1, self.update_button_state)
+        
+        # Load saved settings into inputs
+        stepper_num = self.id.split("_")[-1]
+        print(f"\nLoading saved settings for {self.id}:")
+        divisions = self.settings.get_setting(stepper_num, "divisions")
+        min_pos = self.settings.get_setting(stepper_num, "min_position")
+        max_pos = self.settings.get_setting(stepper_num, "max_position")
+        
+        print(f"Setting input values for {self.id}:")
+        print(f"  divisions: {divisions}")
+        print(f"  min_position: {min_pos}")
+        print(f"  max_position: {max_pos}")
+        
+        self.query_one("#divisions_stepper").value = divisions
+        self.query_one("#min_position_stepper").value = min_pos
+        self.query_one("#max_position_stepper").value = max_pos
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -362,29 +387,29 @@ class StepperMotor(Static):
     @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle an input change"""
+        stepper_num = self.id.split("_")[-1]
+        
         if event.input.id == "divisions_stepper":
-            # Store the value even if empty
             self.divisions = event.value
-            # Only update progress if it's a valid number
+            self.settings.queue_save(stepper_num, "divisions", event.value)
             if event.value and event.value.isdigit():
                 self.query_one(DivisionDisplay).update_total_divisions(event.value)
-            print(self.id, " divisions: ", self.divisions)
             
         elif event.input.id == "max_position_stepper":
-            # Extract number if present, otherwise store empty string
             numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
-            self.max_position = numbers[0] if numbers else ""
+            value = numbers[0] if numbers else ""
+            self.max_position = value
+            self.settings.queue_save(stepper_num, "max_position", value)
             self.query_one(MaxPositionDisplay).max_position = self.max_position
-            print(self.id, " max position: ", self.max_position)
             
         elif event.input.id == "min_position_stepper":
-            # Extract number if present, otherwise store empty string
             numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
-            self.min_position = numbers[0] if numbers else ""
+            value = numbers[0] if numbers else ""
+            self.min_position = value
+            self.settings.queue_save(stepper_num, "min_position", value)
             self.query_one(MinPositionDisplay).min_position = self.min_position
-            print(self.id, " min position: ", self.min_position)
         
-        # Always update Run button state after any input change
+        # Update Run button state
         run_button = self.query_one("#run_stepper")
         run_button.disabled = not self.validate_scan_parameters()
 
@@ -612,14 +637,73 @@ class StepperMotor(Static):
             self._wait_timer.stop()
             self._wait_timer = None
 
+class SettingsManager:
+    """Manages saving and loading of stepper motor settings"""
+    
+    def __init__(self):
+        # Look for settings.json in the scripts folder
+        self.settings_file = Path(__file__).parent / "settings.json"
+        self.save_queue = Queue()
+        print(f"Initializing SettingsManager with settings file: {self.settings_file}")
+        self.settings = self._load_settings()
+        
+        # Start background save thread
+        self.save_thread = Thread(target=self._background_save, daemon=True)
+        self.save_thread.start()
+
+    def _load_settings(self) -> dict:
+        """Load settings from file or return defaults"""
+        try:
+            if self.settings_file.exists():
+                print(f"Loading settings from {self.settings_file}")
+                with open(self.settings_file, 'r') as f:
+                    settings = json.load(f)
+                    print(f"Loaded settings: {json.dumps(settings, indent=2)}")
+                    return settings
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading settings: {e}")
+        
+        print("Using default settings")
+        # Return default settings if file doesn't exist or is invalid
+        return {
+            "stepper_1": {"divisions": "", "min_position": "", "max_position": ""},
+            "stepper_2": {"divisions": "", "min_position": "", "max_position": ""},
+            "stepper_3": {"divisions": "", "min_position": "", "max_position": ""}
+        }
+
+    def _background_save(self):
+        """Background thread for saving settings"""
+        while True:
+            try:
+                # Wait for new settings to save
+                settings = self.save_queue.get()
+                print(f"Saving settings to {self.settings_file}:")
+                print(json.dumps(settings, indent=2))
+                
+                # Save to file
+                with open(self.settings_file, 'w') as f:
+                    json.dump(settings, f, indent=4)
+                    
+            except Exception as e:
+                print(f"Error saving settings: {e}")
+            
+            time.sleep(0.1)  # Prevent excessive saves
+
+    def queue_save(self, stepper_id: str, setting_type: str, value: str):
+        """Queue a settings save operation"""
+        print(f"Queueing save for stepper_{stepper_id} {setting_type}: {value}")
+        self.settings[f"stepper_{stepper_id}"][setting_type] = value
+        self.save_queue.put(self.settings)
+
+    def get_setting(self, stepper_id: str, setting_type: str) -> str:
+        """Get a setting value"""
+        value = self.settings[f"stepper_{stepper_id}"].get(setting_type, "")
+        print(f"Getting setting for stepper_{stepper_id} {setting_type}: {value}")
+        return value
+
 class Scant(App):
     """The main application."""
     CSS_PATH = "main.tcss"
-    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
-
-    def on_mount(self) -> None:
-        """Event handler called when widget is added to the app"""
-        self.dark = True
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app"""
@@ -630,10 +714,6 @@ class Scant(App):
             StepperMotor(id="stepper_motor_2"), 
             StepperMotor(id="stepper_motor_3"), 
             id="scant")
-    
-    def action_toggle_dark(self) -> None:
-        """An action to toggle dark mode."""
-        self.dark = not self.dark
 
 if __name__ == "__main__":
     app = Scant()
