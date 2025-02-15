@@ -297,15 +297,62 @@ class StepperMotor(Static):
                 # If conversion fails, just continue without updating min/max
                 pass
 
+    def is_position_reached(self) -> bool:
+        """Check if current position is within tolerance of target"""
+        if not self.energized or not self.tic:
+            return False
+        
+        current_pos = int(float(self.current_position))
+        target_pos = int(float(self.target_position))
+        tolerance = abs(int(target_pos * self.POSITION_TOLERANCE))
+        return abs(current_pos - target_pos) <= tolerance
+
+    def is_position_reached_exact(self) -> bool:
+        """Check if current position exactly matches target"""
+        if not self.energized or not self.tic:
+            return False
+        
+        current_pos = int(float(self.current_position))
+        target_pos = int(float(self.target_position))
+        return current_pos == target_pos
+
     def zero_stepper(self):
-        if self.tic and self.energized:
-            self.tic.halt_and_set_position(0)
-            self.tic.exit_safe_start()
-            self.current_position = 0
-            self.query_one(CurrentPositionDisplay).current_position = self.current_position
-            self.target_position = 0
-            self.query_one(TargetPositionDisplay).target_position = self.target_position
-            self.moving = False
+        """Move stepper motor to physical position 0, then reset position tracking"""
+        if not self.tic or not self.energized:
+            return
+            
+        # First move to position 0
+        self.target_position = 0
+        self.query_one(TargetPositionDisplay).target_position = self.target_position
+        
+        # Store reference to the timer so we can stop it if needed
+        if hasattr(self, '_zero_timer') and self._zero_timer:
+            self._zero_timer.stop()
+        self._zero_timer = None
+        
+        # Set a timer to check position periodically instead of blocking
+        def check_position():
+            if self.scan_state != ScanState.IDLE:
+                # Don't interfere with scanning
+                if hasattr(self, '_zero_timer'):
+                    self._zero_timer.stop()
+                self._zero_timer = None
+                return False
+                
+            if self.is_position_reached_exact():
+                # Once at 0, reset position tracking
+                self.tic.halt_and_set_position(0)
+                self.tic.exit_safe_start()
+                self.current_position = 0
+                self.query_one(CurrentPositionDisplay).current_position = self.current_position
+                self.moving = False
+                if hasattr(self, '_zero_timer'):
+                    self._zero_timer.stop()
+                self._zero_timer = None
+                return False  # Stop the timer
+            return True  # Continue checking
+            
+        self._zero_timer = self.set_interval(0.1, check_position)
 
     def update_initialized(self, event: Button.Pressed) -> None:
         self.initialized = not self.initialized
@@ -491,37 +538,6 @@ class StepperMotor(Static):
         except (ValueError, TypeError):
             return []
 
-    def is_position_reached(self) -> bool:
-        """Check if current position is within tolerance of target"""
-        if not self.energized or not self.tic:
-            return False
-        
-        current_pos = int(float(self.current_position))
-        target_pos = int(float(self.target_position))
-        tolerance = abs(int(target_pos * self.POSITION_TOLERANCE))
-        return abs(current_pos - target_pos) <= tolerance
-
-    def finish_waiting(self) -> None:
-        """Called after waiting at a position"""
-        if self.scan_state != ScanState.WAITING:
-            return
-            
-        positions = self.get_division_positions()
-        self.current_division += 1
-        
-        if self.current_division >= len(positions):
-            self.stop_scan()
-        else:
-            # Start new movement
-            current_pos = self.current_position
-            target_pos = positions[self.current_division]
-            self.target_position = target_pos
-            
-            # Update progress tracking
-            progress = self.query_one(DivisionDisplay)
-            progress.start_new_movement(current_pos, target_pos)
-            self.scan_state = ScanState.MOVING
-
     def update_scan_state(self) -> None:
         """Update the scanning state machine"""
         if self.scan_state == ScanState.IDLE:
@@ -550,10 +566,36 @@ class StepperMotor(Static):
             # Waiting is handled by finish_waiting callback
             pass
 
+    def finish_waiting(self) -> None:
+        """Called after waiting at a position"""
+        if self.scan_state != ScanState.WAITING:
+            return
+            
+        positions = self.get_division_positions()
+        self.current_division += 1
+        
+        if self.current_division >= len(positions):
+            self.stop_scan()
+        else:
+            # Start new movement
+            current_pos = self.current_position
+            target_pos = positions[self.current_division]
+            self.target_position = target_pos
+            
+            # Update progress tracking
+            progress = self.query_one(DivisionDisplay)
+            progress.start_new_movement(current_pos, target_pos)
+            self.scan_state = ScanState.MOVING
+
     def start_scan(self) -> None:
         """Start the scanning sequence"""
         if not self.validate_scan_parameters():
             return
+            
+        # Stop any active zero timer
+        if hasattr(self, '_zero_timer') and self._zero_timer:
+            self._zero_timer.stop()
+            self._zero_timer = None
             
         positions = self.get_division_positions()
         if not positions:
@@ -575,7 +617,11 @@ class StepperMotor(Static):
 
     def stop_scan(self) -> None:
         """Stop the scanning sequence"""
-        # Stop any active wait timer
+        # Stop any active timers
+        if hasattr(self, '_zero_timer') and self._zero_timer:
+            self._zero_timer.stop()
+            self._zero_timer = None
+            
         if self._wait_timer:
             self._wait_timer.stop()
             self._wait_timer = None
