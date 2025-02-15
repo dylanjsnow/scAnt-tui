@@ -1,6 +1,6 @@
 {
     "stepper_1": {
-        "divisions": "12",
+        "divisions": "4",
         "min_position": "-20",
         "max_position": "40"
     },

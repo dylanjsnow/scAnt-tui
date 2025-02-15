@@ -426,8 +426,22 @@ class StepperMotor(Static):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the stepper motor, with a top row of changeable variables and a bottom row of fixed values"""
-        yield Select(options=((axis, axis) for axis in self.axes), id="axis_stepper", value=self.axes[int(self.id.split("_")[-1]) - 1], allow_blank=False)
-        yield Select(options=((serial, serial) for serial in self.serial_numbers), id="serial_stepper", value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "", allow_blank=False)
+        yield Select(
+            options=((axis, axis) for axis in self.axes), 
+            id="axis_stepper",
+            value=self.axes[int(self.id.split("_")[-1]) - 1],
+            allow_blank=False,
+            prompt="Select axis",
+            tooltip="Choose the movement axis for this stepper motor"
+        )
+        yield Select(
+            options=((serial, serial) for serial in self.serial_numbers),
+            id="serial_stepper", 
+            value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "",
+            allow_blank=False,
+            prompt="Select device",
+            tooltip="Choose the serial number of the Tic stepper motor controller"
+        )
         yield Static()
         yield Static()
         yield Button("Initialize", id="initialize_stepper", variant="default")
@@ -439,9 +453,27 @@ class StepperMotor(Static):
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
         yield Button("Scan", id="run_stepper", variant="success", disabled=True)
-        yield Input(placeholder="Divisions: ", id="divisions_stepper", disabled=True)
-        yield Input(placeholder="Set min: ", id="min_position_stepper", disabled=True)
-        yield Input(placeholder="Set max: ", id="max_position_stepper", disabled=True)
+        yield Input(
+            placeholder="Number of positions to scan",
+            id="divisions_stepper",
+            disabled=True,
+            tooltip="Enter the number of evenly-spaced positions to stop at during the scan",
+            type="integer"
+        )
+        yield Input(
+            placeholder="Minimum position (steps)",
+            id="min_position_stepper",
+            disabled=True, 
+            tooltip="Enter the minimum motor position in steps (-2,147,483,648 to 2,147,483,647)",
+            type="integer"
+        )
+        yield Input(
+            placeholder="Maximum position (steps)",
+            id="max_position_stepper",
+            disabled=True,
+            tooltip="Enter the maximum motor position in steps (-2,147,483,648 to 2,147,483,647)",
+            type="integer"
+        )
         yield DivisionDisplay(id="division_display")
 
     def get_division_positions(self) -> list[int]:
