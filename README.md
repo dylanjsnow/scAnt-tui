@@ -73,3 +73,10 @@ For development run:
 textual console -x SYSTEM -x EVENT -x DEBUG -x INFO # textual console -v for verbose logs
 textual run --dev scripts/main.py
 ```
+
+### Notes
+
+Current limit settings: https://www.pololu.com/docs/0J71/6#setting-current-limit
+Maximum current limit for Tic T500 for the Pitch/ Yaw servo is 2131 mA.
+Others are uncertain, believed to be 1000 mA.
+
