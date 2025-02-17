@@ -215,10 +215,48 @@ class StepperMotor(Static):
     POSITION_TOLERANCE = 0.05  # 5% tolerance for position matching
     DIVISION_WAIT_TIME = 2.0  # Seconds to wait at each division
     _wait_timer = None  # Store reference to active timer
-
+    current_limit = reactive(2)  # Default to 174mA (code 2)
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.settings = SettingsManager()
+        
+        # Create current limit options tuple
+        self.current_limit_options = (
+            ("0 mA (0)", "0"),
+            ("1 mA (1)", "1"),
+            ("174 mA (2)", "2"),
+            ("343 mA (3)", "3"),
+            ("495 mA (4)", "4"),
+            ("634 mA (5)", "5"),
+            ("762 mA (6)", "6"),
+            ("880 mA (7)", "7"),
+            ("990 mA (8)", "8"),
+            ("1092 mA (9)", "9"),
+            ("1189 mA (10)", "10"),
+            ("1281 mA (11)", "11"),
+            ("1368 mA (12)", "12"),
+            ("1452 mA (13)", "13"),
+            ("1532 mA (14)", "14"),
+            ("1611 mA (15)", "15"),
+            ("1687 mA (16)", "16"),
+            ("1762 mA (17)", "17"),
+            ("1835 mA (18)", "18"),
+            ("1909 mA (19)", "19"),
+            ("1982 mA (20)", "20"),
+            ("2056 mA (21)", "21"),
+            ("2131 mA (22)", "22"),
+            ("2207 mA (23)", "23"),
+            ("2285 mA (24)", "24"),
+            ("2366 mA (25)", "25"),
+            ("2451 mA (26)", "26"),
+            ("2540 mA (27)", "27"),
+            ("2634 mA (28)", "28"),
+            ("2734 mA (29)", "29"),
+            ("2843 mA (30)", "30"),
+            ("2962 mA (31)", "31"),
+            ("3093 mA (32)", "32"),
+        )
 
     def reset(self):
         self.axis = ""
@@ -250,15 +288,19 @@ class StepperMotor(Static):
         divisions = self.settings.get_setting(stepper_num, "divisions")
         min_pos = self.settings.get_setting(stepper_num, "min_position")
         max_pos = self.settings.get_setting(stepper_num, "max_position")
+        current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"  # Default to 2 if empty
         
         print(f"Setting input values for {self.id}:")
         print(f"  divisions: {divisions}")
         print(f"  min_position: {min_pos}")
         print(f"  max_position: {max_pos}")
+        print(f"  current_limit: {current_limit}")
         
         self.query_one("#divisions_stepper").value = divisions
         self.query_one("#min_position_stepper").value = min_pos
         self.query_one("#max_position_stepper").value = max_pos
+        if current_limit in [opt[1] for opt in self.current_limit_options]:  # Only set if value is valid
+            self.query_one("#current_limit_stepper").value = current_limit
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -375,7 +417,7 @@ class StepperMotor(Static):
             self.remove_class("deenergized")
             self.energized = False
         for select in self.query(Select):
-            if select.id in ["axis_stepper", "serial_stepper", "zero_stepper", "divisions_stepper"]:
+            if select.id in ["axis_stepper", "serial_stepper", "zero_stepper", "divisions_stepper", "current_limit_stepper"]:
                 select.disabled = self.initialized
         for button in self.query(Button):
             if button.id in get_buttons_to_initialize():
@@ -390,9 +432,13 @@ class StepperMotor(Static):
         self.add_class("energized")
         self.energized = True
         self.tic.halt_and_set_position(self.current_position)
+        
+        # Set the current limit when energizing
+        if self.current_limit:
+            self.tic.set_current_limit(int(self.current_limit))
+            
         self.tic.energize()
         self.tic.exit_safe_start()
-
 
     def update_deenergized(self, event: Button.Pressed) -> None:
         self.remove_class("energized")
@@ -474,6 +520,20 @@ class StepperMotor(Static):
         elif event.select.id == "serial_stepper":
             self.serial_number = event.value
             print(self.id, " serial number: ", self.serial_number)
+        elif event.select.id == "current_limit_stepper":
+            self.current_limit = event.value
+            # Get the mA value from the options tuple for display
+            current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
+            print(f"{self.id} current limit set to: {current_ma}")
+            
+            # Save to settings
+            stepper_num = self.id.split("_")[-1]
+            self.settings.queue_save(stepper_num, "current_limit", event.value)
+            
+            # Update the motor if it's connected and energized
+            if self.tic and self.energized:
+                self.tic.set_current_limit(int(event.value))
+                self.tic.exit_safe_start()
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the stepper motor, with a top row of changeable variables and a bottom row of fixed values"""
@@ -524,6 +584,14 @@ class StepperMotor(Static):
             disabled=True,
             tooltip="Enter the maximum motor position in steps (-2,147,483,648 to 2,147,483,647)",
             type="integer"
+        )
+        yield Select(
+            options=self.current_limit_options,
+            id="current_limit_stepper",
+            value="2",  # Default to 174mA
+            allow_blank=False,
+            prompt="Select current limit",
+            tooltip="Set the maximum current for the stepper motor coils"
         )
         yield DivisionDisplay(id="division_display")
 
@@ -740,6 +808,15 @@ class SettingsManager:
                 print(f"Loading settings from {self.settings_file}")
                 with open(self.settings_file, 'r') as f:
                     settings = json.load(f)
+                    # Ensure all steppers have all required settings with defaults
+                    for stepper in ["1", "2", "3"]:
+                        stepper_key = f"stepper_{stepper}"
+                        if stepper_key not in settings:
+                            settings[stepper_key] = {}
+                        settings[stepper_key].setdefault("divisions", "")
+                        settings[stepper_key].setdefault("min_position", "")
+                        settings[stepper_key].setdefault("max_position", "")
+                        settings[stepper_key].setdefault("current_limit", "2")
                     print(f"Loaded settings: {json.dumps(settings, indent=2)}")
                     return settings
         except (json.JSONDecodeError, IOError) as e:
@@ -748,10 +825,47 @@ class SettingsManager:
         print("Using default settings")
         # Return default settings if file doesn't exist or is invalid
         return {
-            "stepper_1": {"divisions": "", "min_position": "", "max_position": ""},
-            "stepper_2": {"divisions": "", "min_position": "", "max_position": ""},
-            "stepper_3": {"divisions": "", "min_position": "", "max_position": ""}
+            "stepper_1": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"},
+            "stepper_2": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"},
+            "stepper_3": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"}
         }
+
+    def queue_save(self, stepper_id: str, setting_type: str, value: str):
+        """Queue a settings save operation"""
+        stepper_key = f"stepper_{stepper_id}"
+        print(f"Queueing save for {stepper_key} {setting_type}: {value}")
+        
+        # Create a deep copy of current settings to avoid reference issues
+        settings_copy = json.loads(json.dumps(self.settings))
+        
+        # Ensure stepper exists in settings
+        if stepper_key not in settings_copy:
+            settings_copy[stepper_key] = {}
+            
+        # Ensure all settings exist for this stepper
+        if setting_type not in settings_copy[stepper_key]:
+            settings_copy[stepper_key].setdefault("divisions", "")
+            settings_copy[stepper_key].setdefault("min_position", "")
+            settings_copy[stepper_key].setdefault("max_position", "")
+            settings_copy[stepper_key].setdefault("current_limit", "2")
+            
+        # Update the specific setting
+        settings_copy[stepper_key][setting_type] = value
+        
+        # Update our internal settings and queue the copy for saving
+        self.settings = settings_copy
+        self.save_queue.put(settings_copy)
+        
+        # Debug output
+        print("Current settings state:")
+        print(json.dumps(self.settings, indent=2))
+
+    def get_setting(self, stepper_id: str, setting_type: str) -> str:
+        """Get a setting value"""
+        stepper_key = f"stepper_{stepper_id}"
+        value = self.settings.get(stepper_key, {}).get(setting_type, "")
+        print(f"Getting setting for {stepper_key} {setting_type}: {value}")
+        return value
 
     def _background_save(self):
         """Background thread for saving settings"""
@@ -770,18 +884,6 @@ class SettingsManager:
                 print(f"Error saving settings: {e}")
             
             time.sleep(0.1)  # Prevent excessive saves
-
-    def queue_save(self, stepper_id: str, setting_type: str, value: str):
-        """Queue a settings save operation"""
-        print(f"Queueing save for stepper_{stepper_id} {setting_type}: {value}")
-        self.settings[f"stepper_{stepper_id}"][setting_type] = value
-        self.save_queue.put(self.settings)
-
-    def get_setting(self, stepper_id: str, setting_type: str) -> str:
-        """Get a setting value"""
-        value = self.settings[f"stepper_{stepper_id}"].get(setting_type, "")
-        print(f"Getting setting for stepper_{stepper_id} {setting_type}: {value}")
-        return value
 
 class Scant(App):
     """The main application."""
