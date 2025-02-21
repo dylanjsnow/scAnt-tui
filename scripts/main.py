@@ -274,13 +274,6 @@ class StepperMotor(Static):
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
         self.add_class("deenergized")
-        self.serial_number = self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else ""
-        self.set_interval(1 / 10.0, self.watch_current_position)
-        self.set_interval(1 / 10.0, self.watch_target_position)
-        # Add interval for scan state machine
-        self.set_interval(0.1, self.update_scan_state)
-        # Defer button state update to allow widgets to mount
-        self.set_timer(0.1, self.update_button_state)
         
         # Load saved settings into inputs
         stepper_num = self.id.split("_")[-1]
@@ -289,18 +282,39 @@ class StepperMotor(Static):
         min_pos = self.settings.get_setting(stepper_num, "min_position")
         max_pos = self.settings.get_setting(stepper_num, "max_position")
         current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"  # Default to 2 if empty
+        saved_axis = self.settings.get_setting(stepper_num, "axis")
+        saved_serial = self.settings.get_setting(stepper_num, "serial")
         
         print(f"Setting input values for {self.id}:")
         print(f"  divisions: {divisions}")
         print(f"  min_position: {min_pos}")
         print(f"  max_position: {max_pos}")
         print(f"  current_limit: {current_limit}")
+        print(f"  axis: {saved_axis}")
+        print(f"  serial: {saved_serial}")
         
+        # Set default values if saved values are empty
+        if not saved_axis and len(self.axes) > 0:
+            saved_axis = self.axes[int(stepper_num) - 1]
+        if not saved_serial and len(self.serial_numbers) > 0:
+            saved_serial = self.serial_numbers[int(stepper_num) - 1]
+            
+        # Set the values to the widgets
         self.query_one("#divisions_stepper").value = divisions
         self.query_one("#min_position_stepper").value = min_pos
         self.query_one("#max_position_stepper").value = max_pos
-        if current_limit in [opt[1] for opt in self.current_limit_options]:  # Only set if value is valid
+        if current_limit in [opt[1] for opt in self.current_limit_options]:
             self.query_one("#current_limit_stepper").value = current_limit
+        if saved_axis in self.axes:
+            self.query_one("#axis_stepper").value = saved_axis
+        if saved_serial in self.serial_numbers:
+            self.query_one("#serial_stepper").value = saved_serial
+            
+        # Set up intervals
+        self.set_interval(1 / 10.0, self.watch_current_position)
+        self.set_interval(1 / 10.0, self.watch_target_position)
+        self.set_interval(0.1, self.update_scan_state)
+        self.set_timer(0.1, self.update_button_state)
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -435,6 +449,7 @@ class StepperMotor(Static):
         
         # Set the current limit when energizing
         if self.current_limit:
+            print(f"{self.id} current limit set to: {self.current_limit}")
             self.tic.set_current_limit(int(self.current_limit))
             
         self.tic.energize()
@@ -514,20 +529,23 @@ class StepperMotor(Static):
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle a select change"""
         print(self.id, " select changed to: ", event.value)
+        stepper_num = self.id.split("_")[-1]
+        
         if event.select.id == "axis_stepper":
             self.axis = event.value
             print(self.id, " axis: ", self.axis)
+            self.settings.queue_save(stepper_num, "axis", event.value)
+            
         elif event.select.id == "serial_stepper":
             self.serial_number = event.value
             print(self.id, " serial number: ", self.serial_number)
+            self.settings.queue_save(stepper_num, "serial", event.value)
+            
         elif event.select.id == "current_limit_stepper":
             self.current_limit = event.value
             # Get the mA value from the options tuple for display
             current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
             print(f"{self.id} current limit set to: {current_ma}")
-            
-            # Save to settings
-            stepper_num = self.id.split("_")[-1]
             self.settings.queue_save(stepper_num, "current_limit", event.value)
             
             # Update the motor if it's connected and energized
@@ -553,9 +571,16 @@ class StepperMotor(Static):
             prompt="Select device",
             tooltip="Choose the serial number of the Tic stepper motor controller"
         )
+        yield Select(
+            options=self.current_limit_options,
+            id="current_limit_stepper",
+            value="2",  # Default to 174mA
+            allow_blank=False,
+            prompt="Select current limit",
+            tooltip="Set the maximum current for the stepper motor coils"
+        )
         yield Static()
-        yield Static()
-        yield Button("Initialize", id="initialize_stepper", variant="default")
+        yield Button("On/ Off", id="initialize_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
         yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
@@ -585,14 +610,7 @@ class StepperMotor(Static):
             tooltip="Enter the maximum motor position in steps (-2,147,483,648 to 2,147,483,647)",
             type="integer"
         )
-        yield Select(
-            options=self.current_limit_options,
-            id="current_limit_stepper",
-            value="2",  # Default to 174mA
-            allow_blank=False,
-            prompt="Select current limit",
-            tooltip="Set the maximum current for the stepper motor coils"
-        )
+        
         yield DivisionDisplay(id="division_display")
 
     def get_division_positions(self) -> list[int]:
@@ -817,6 +835,8 @@ class SettingsManager:
                         settings[stepper_key].setdefault("min_position", "")
                         settings[stepper_key].setdefault("max_position", "")
                         settings[stepper_key].setdefault("current_limit", "2")
+                        settings[stepper_key].setdefault("axis", "")
+                        settings[stepper_key].setdefault("serial", "")
                     print(f"Loaded settings: {json.dumps(settings, indent=2)}")
                     return settings
         except (json.JSONDecodeError, IOError) as e:
@@ -825,9 +845,9 @@ class SettingsManager:
         print("Using default settings")
         # Return default settings if file doesn't exist or is invalid
         return {
-            "stepper_1": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"},
-            "stepper_2": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"},
-            "stepper_3": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2"}
+            "stepper_1": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""},
+            "stepper_2": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""},
+            "stepper_3": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""}
         }
 
     def queue_save(self, stepper_id: str, setting_type: str, value: str):
