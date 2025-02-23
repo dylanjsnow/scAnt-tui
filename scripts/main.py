@@ -38,7 +38,7 @@ def get_buttons_to_initialize():
 
 def get_inputs_to_initialize():
     """Return a list of inputs that should be disabled until the stepper motor is initialized"""
-    return ["divisions_stepper", "max_position_stepper", "min_position_stepper"]
+    return ["divisions_stepper", "max_position_stepper", "min_position_stepper", "max_speed_stepper"]
 
 class CurrentPositionDisplay(Static):
     """A widget to display the current position"""
@@ -216,6 +216,7 @@ class StepperMotor(Static):
     DIVISION_WAIT_TIME = 2.0  # Seconds to wait at each division
     _wait_timer = None  # Store reference to active timer
     current_limit = reactive(2)  # Default to 174mA (code 2)
+    max_speed = reactive(0)  # Add this with other reactive properties
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -284,6 +285,7 @@ class StepperMotor(Static):
         current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"  # Default to 2 if empty
         saved_axis = self.settings.get_setting(stepper_num, "axis")
         saved_serial = self.settings.get_setting(stepper_num, "serial")
+        max_speed = self.settings.get_setting(stepper_num, "max_speed") or "1000"  # Default to 1000 if empty
         
         print(f"Setting input values for {self.id}:")
         print(f"  divisions: {divisions}")
@@ -309,6 +311,7 @@ class StepperMotor(Static):
             self.query_one("#axis_stepper").value = saved_axis
         if saved_serial in self.serial_numbers:
             self.query_one("#serial_stepper").value = saved_serial
+        self.query_one("#max_speed_stepper").value = max_speed
             
         # Set up intervals
         self.set_interval(1 / 10.0, self.watch_current_position)
@@ -521,6 +524,36 @@ class StepperMotor(Static):
             self.settings.queue_save(stepper_num, "min_position", value)
             self.query_one(MinPositionDisplay).min_position = self.min_position
         
+        elif event.input.id == "max_speed_stepper":
+            try:
+                # Convert to float to handle decimal inputs
+                speed = float(event.value)
+                
+                # Validate speed range (0.005 to 50000 steps/s)
+                min_speed = 0.005  # 1/200 steps per second
+                max_speed = 50000
+                
+                if speed < min_speed:
+                    speed = min_speed
+                elif speed > max_speed:
+                    speed = max_speed
+                
+                # Convert to integer for the Tic controller
+                speed_steps = int(speed * 10000)  # Tic expects speed in units of steps * 10000
+                
+                # Update the motor if connected
+                if self.tic and self.energized:
+                    self.tic.set_max_speed(speed_steps)
+                    self.tic.exit_safe_start()
+                
+                # Update display and save setting
+                self.max_speed = speed
+                self.settings.queue_save(stepper_num, "max_speed", str(speed))
+                
+            except (ValueError, TypeError):
+                # Invalid input - reset to previous value
+                event.input.value = str(self.max_speed)
+        
         # Update Run button state
         run_button = self.query_one("#run_stepper")
         run_button.disabled = not self.validate_scan_parameters()
@@ -579,7 +612,14 @@ class StepperMotor(Static):
             prompt="Select current limit",
             tooltip="Set the maximum current for the stepper motor coils"
         )
-        yield Static()
+        yield Input(
+            placeholder="Maximum speed (steps/s)",
+            id="max_speed_stepper",
+            value="1000",  # Default to 1000 steps/s
+            disabled=True,
+            tooltip="Set the maximum speed in steps per second (0.005 to 50000 steps/s)",
+            type="number"
+        )
         yield Button("On/ Off", id="initialize_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
@@ -837,6 +877,7 @@ class SettingsManager:
                         settings[stepper_key].setdefault("current_limit", "2")
                         settings[stepper_key].setdefault("axis", "")
                         settings[stepper_key].setdefault("serial", "")
+                        settings[stepper_key].setdefault("max_speed", "1000")  # Default max speed
                     print(f"Loaded settings: {json.dumps(settings, indent=2)}")
                     return settings
         except (json.JSONDecodeError, IOError) as e:
@@ -845,9 +886,9 @@ class SettingsManager:
         print("Using default settings")
         # Return default settings if file doesn't exist or is invalid
         return {
-            "stepper_1": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""},
-            "stepper_2": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""},
-            "stepper_3": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": ""}
+            "stepper_1": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": "", "max_speed": "1000"},
+            "stepper_2": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": "", "max_speed": "1000"},
+            "stepper_3": {"divisions": "", "min_position": "", "max_position": "", "current_limit": "2", "axis": "", "serial": "", "max_speed": "1000"}
         }
 
     def queue_save(self, stepper_id: str, setting_type: str, value: str):
@@ -905,6 +946,104 @@ class SettingsManager:
             
             time.sleep(0.1)  # Prevent excessive saves
 
+class ScanManager(Static):
+    """Manages coordinated scanning across all stepper motors"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stepper_motors = []
+        self.scanning = False
+        
+    def on_mount(self) -> None:
+        """Get references to stepper motors after mount"""
+        # Wait briefly to ensure steppers are mounted
+        def get_steppers():
+            self.stepper_motors = [
+                self.app.query_one("#stepper_motor_1"),
+                self.app.query_one("#stepper_motor_2"), 
+                self.app.query_one("#stepper_motor_3")
+            ]
+            
+        self.set_timer(0.1, get_steppers)
+        
+    def compose(self) -> ComposeResult:
+        """Create child widgets for scan management"""
+        yield Button("Start Full Scan", id="start_full_scan", variant="success")
+        yield Button("Stop All", id="stop_all_scan", variant="error")
+        
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses"""
+        if event.button.id == "start_full_scan":
+            self.start_full_scan()
+        elif event.button.id == "stop_all_scan":
+            self.stop_all_scans()
+            
+    def start_full_scan(self) -> None:
+        """Start a coordinated scan across all motors"""
+        if not self.stepper_motors:
+            return
+            
+        # Check if all motors are ready
+        ready_motors = []
+        for motor in self.stepper_motors:
+            if motor.validate_scan_parameters():
+                ready_motors.append(motor)
+                
+        if not ready_motors:
+            return
+            
+        # Start scan on all ready motors
+        self.scanning = True
+        for motor in ready_motors:
+            motor.start_scan()
+            
+        # Update button states
+        start_button = self.query_one("#start_full_scan")
+        start_button.disabled = True
+        stop_button = self.query_one("#stop_all_scan") 
+        stop_button.disabled = False
+        
+        # Set up monitoring of scan completion
+        self.set_interval(0.1, self.check_scan_completion)
+        
+    def stop_all_scans(self) -> None:
+        """Stop scanning on all motors"""
+        if not self.stepper_motors:
+            return
+            
+        self.scanning = False
+        for motor in self.stepper_motors:
+            if motor.scan_state != ScanState.IDLE:
+                motor.stop_scan()
+                
+        # Update button states
+        start_button = self.query_one("#start_full_scan")
+        start_button.disabled = False
+        stop_button = self.query_one("#stop_all_scan")
+        stop_button.disabled = True
+        
+    def check_scan_completion(self) -> bool:
+        """Check if all motors have completed scanning"""
+        if not self.scanning:
+            return False
+            
+        all_complete = True
+        for motor in self.stepper_motors:
+            if motor.scan_state != ScanState.IDLE:
+                all_complete = False
+                break
+                
+        if all_complete:
+            self.scanning = False
+            # Update button states
+            start_button = self.query_one("#start_full_scan")
+            start_button.disabled = False
+            stop_button = self.query_one("#stop_all_scan")
+            stop_button.disabled = True
+            return False  # Stop the interval
+            
+        return True  # Continue checking
+
 class Scant(App):
     """The main application."""
     CSS_PATH = "main.tcss"
@@ -913,6 +1052,7 @@ class Scant(App):
         """Create child widgets for the app"""
         yield Header()
         yield Footer()
+        yield ScanManager()
         yield ScrollableContainer(
             StepperMotor(id="stepper_motor_1"), 
             StepperMotor(id="stepper_motor_2"), 
