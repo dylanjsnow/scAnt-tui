@@ -92,3 +92,9 @@ Current limit settings: https://www.pololu.com/docs/0J71/6#setting-current-limit
 Maximum current limit for Tic T500 for the Pitch/ Yaw servo is 2131 mA.
 Others are uncertain, believed to be 1000 mA.
 
+Ranges for stepper motors:
+
+Tilt: -15000 to 12000 with correct zeroing, speed 10000-50000
+Yaw:
+Forward:
+
