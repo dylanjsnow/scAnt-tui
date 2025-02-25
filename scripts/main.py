@@ -443,11 +443,11 @@ class StepperMotor(Static):
 
     def update_control_states(self) -> None:
         """Update all control states based on current motor state"""
-        # Configuration controls (only enabled when OFF)
+        # Configuration controls (enabled when ON)
         config_controls = ["axis_stepper", "serial_stepper", "current_limit_stepper", "max_speed_stepper"]
         for control_id in config_controls:
             control = self.query_one(f"#{control_id}")
-            control.disabled = self.initialized
+            control.disabled = not self.initialized  # Disabled when OFF
             if not control.disabled:
                 control.add_class("enabled")
             else:
@@ -462,6 +462,10 @@ class StepperMotor(Static):
         energize_button = self.query_one("#energize_stepper")
         energize_button.disabled = not self.initialized
         energize_button.label = "Deenergize" if self.energized else "Energize"
+        if self.energized:
+            energize_button.add_class("energized")
+        else:
+            energize_button.remove_class("energized")
         if not energize_button.disabled:
             energize_button.add_class("enabled")
         else:
@@ -636,6 +640,7 @@ class StepperMotor(Static):
         yield Button("On", id="power_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
+        yield Static()
         
         # Position displays
         yield CurrentPositionDisplay()

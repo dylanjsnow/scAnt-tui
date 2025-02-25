@@ -117,3 +117,18 @@ Button#run_stepper.-error:hover {
     text-style: italic;
 }
 
+/* Add these button-specific styles */
+Button#power_stepper {
+    background: $foreground 10%;
+    color: $text;
+}
+
+Button#energize_stepper {
+    background: $success;
+    color: $text;
+}
+
+Button#energize_stepper.energized {
+    background: $error;
+}
+
