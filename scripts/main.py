@@ -449,7 +449,7 @@ class StepperMotor(Static):
         """Update all control states based on current motor state"""
         scanning_in_progress = self.scan_state != ScanState.IDLE
         
-        # Configuration controls (enabled when ON and not scanning)
+        # Configuration controls (disabled during scan)
         config_controls = ["axis_stepper", "serial_stepper", "current_limit_stepper", "max_speed_stepper"]
         for control_id in config_controls:
             control = self.query_one(f"#{control_id}")
@@ -480,7 +480,7 @@ class StepperMotor(Static):
         else:
             energize_button.remove_class("enabled")
 
-        # Zero button (enabled when ON)
+        # Zero button (always enabled when ON)
         zero_button = self.query_one("#zero_stepper")
         zero_button.disabled = not self.initialized
         if not zero_button.disabled:
@@ -488,7 +488,7 @@ class StepperMotor(Static):
         else:
             zero_button.remove_class("enabled")
 
-        # Position inputs (enabled when ON and not scanning)
+        # Position inputs (disabled during scan)
         position_controls = ["divisions_stepper", "min_position_stepper", "max_position_stepper"]
         for control_id in position_controls:
             control = self.query_one(f"#{control_id}")
@@ -761,62 +761,65 @@ class StepperMotor(Static):
             self.scan_state = ScanState.MOVING
 
     def start_scan(self) -> None:
-        """Start the scanning sequence"""
+        """Start a new scan"""
         if not self.validate_scan_parameters():
             return
-            
-        # Stop any active zero timer
-        if hasattr(self, '_zero_timer') and self._zero_timer:
-            self._zero_timer.stop()
-            self._zero_timer = None
-            
+        
         positions = self.get_division_positions()
         if not positions:
             return
-            
-        # Initialize scan
-        self.current_division = 0  # Reset division counter when starting new scan
-        current_pos = self.current_position
-        target_pos = positions[0]
-        self.target_position = target_pos
         
-        # Reset progress display with initial movement info
+        # Reset scan state
+        self.current_division = 0
+        self.target_position = positions[0]
+        
+        # Initialize progress display
         progress = self.query_one(DivisionDisplay)
-        progress.start_new_movement(current_pos, target_pos)
-        progress.update_progress(0, len(positions), current_pos, target_pos)
+        progress.reset()
+        progress.start_new_movement(self.current_position, self.target_position)
         
         # Start state machine
         self.scan_state = ScanState.MOVING
+        
+        # Update button states for scanning
+        self.update_control_states()
+        
+        print(f"{self.id} starting scan with {len(positions)} positions")
 
     def stop_scan(self) -> None:
-        """Stop the scanning sequence"""
-        # Stop any active timers
-        if hasattr(self, '_zero_timer') and self._zero_timer:
-            self._zero_timer.stop()
-            self._zero_timer = None
-            
+        """Stop the current scan"""
         if self._wait_timer:
             self._wait_timer.stop()
             self._wait_timer = None
         
-        # Halt the motor at current position
+        # Halt the motor immediately
         if self.tic and self.energized:
+            self.tic.halt_and_hold()
+            # Set current position as target to prevent further movement
             current_pos = self.tic.get_current_position()
             self.tic.halt_and_set_position(current_pos)
-            self.tic.exit_safe_start()
             self.target_position = current_pos
-            
+            self.tic.exit_safe_start()
+            print(f"{self.id} motor halted at position {current_pos}")
+        
+        # Reset scan state
         self.scan_state = ScanState.IDLE
-        # Don't reset current_division here to allow "Done" state to show
+        self.current_division = 0
+        
+        # Reset progress display
         progress = self.query_one(DivisionDisplay)
-        positions = self.get_division_positions()
-        total_divisions = len(positions) if positions else 0
-        progress.update_progress(
-            self.current_division, 
-            total_divisions,
-            self.current_position, 
-            self.target_position
-        )
+        progress.reset()
+        
+        # Update displays
+        current_pos_display = self.query_one(CurrentPositionDisplay)
+        target_pos_display = self.query_one(TargetPositionDisplay)
+        current_pos_display.update_current_position(self.current_position)
+        target_pos_display.update_target_position(self.target_position)
+        
+        # Update button states after scan
+        self.update_control_states()
+        
+        print(f"{self.id} scan stopped")
 
     def update_button_state(self) -> None:
         """Update run button state after widgets are mounted"""
