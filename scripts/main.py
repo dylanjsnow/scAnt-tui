@@ -380,7 +380,7 @@ class StepperMotor(Static):
 
     def zero_stepper(self):
         """Zero the stepper motor using Tic commands"""
-        if not self.tic or not self.energized:
+        if not self.tic or not self.initialized:
             return
         
         # If a scan is running, stop it first
@@ -393,14 +393,18 @@ class StepperMotor(Static):
         # Set the current position as zero
         self.tic.halt_and_set_position(0)
         
-        # Update our tracking variables
+        # Update our tracking variables and displays
         self.current_position = 0
         self.target_position = 0
-        self.query_one(CurrentPositionDisplay).current_position = 0
-        self.query_one(TargetPositionDisplay).target_position = 0
+        current_pos_display = self.query_one(CurrentPositionDisplay)
+        target_pos_display = self.query_one(TargetPositionDisplay)
+        current_pos_display.update_current_position(0)
+        target_pos_display.update_target_position(0)
         
         # Re-enable motor movement
         self.tic.exit_safe_start()
+        
+        print(f"{self.id} zeroed - Current position: {self.current_position}, Target position: {self.target_position}")
 
     def update_initialized(self, event: Button.Pressed) -> None:
         """Handle power button press"""
@@ -443,22 +447,27 @@ class StepperMotor(Static):
 
     def update_control_states(self) -> None:
         """Update all control states based on current motor state"""
-        # Configuration controls (enabled when ON)
+        scanning_in_progress = self.scan_state != ScanState.IDLE
+        
+        # Configuration controls (enabled when ON and not scanning)
         config_controls = ["axis_stepper", "serial_stepper", "current_limit_stepper", "max_speed_stepper"]
         for control_id in config_controls:
             control = self.query_one(f"#{control_id}")
-            control.disabled = not self.initialized  # Disabled when OFF
+            control.disabled = not self.initialized or scanning_in_progress
             if not control.disabled:
                 control.add_class("enabled")
             else:
                 control.remove_class("enabled")
 
-        # Power button
+        # Power button (disabled during scan)
         power_button = self.query_one("#power_stepper")
         power_button.label = "Off" if self.initialized else "On"
+        power_button.disabled = scanning_in_progress
         power_button.add_class("enabled")
+        if scanning_in_progress:
+            power_button.remove_class("enabled")
 
-        # Energize button
+        # Energize button (always enabled when ON)
         energize_button = self.query_one("#energize_stepper")
         energize_button.disabled = not self.initialized
         energize_button.label = "Deenergize" if self.energized else "Energize"
@@ -471,18 +480,32 @@ class StepperMotor(Static):
         else:
             energize_button.remove_class("enabled")
 
-        # Operation controls (enabled when ON)
-        operation_controls = ["zero_stepper", "run_stepper", "divisions_stepper",
-                            "min_position_stepper", "max_position_stepper"]
-        
-        for control_id in operation_controls:
+        # Zero button (enabled when ON)
+        zero_button = self.query_one("#zero_stepper")
+        zero_button.disabled = not self.initialized
+        if not zero_button.disabled:
+            zero_button.add_class("enabled")
+        else:
+            zero_button.remove_class("enabled")
+
+        # Position inputs (enabled when ON and not scanning)
+        position_controls = ["divisions_stepper", "min_position_stepper", "max_position_stepper"]
+        for control_id in position_controls:
             control = self.query_one(f"#{control_id}")
-            # Only enable if initialized AND (not energized OR scan button)
-            control.disabled = not self.initialized or (self.energized and control_id != "run_stepper")
+            control.disabled = not self.initialized or scanning_in_progress
             if not control.disabled:
                 control.add_class("enabled")
             else:
                 control.remove_class("enabled")
+
+        # Scan button (enabled when ON and ENERGIZED)
+        scan_button = self.query_one("#run_stepper")
+        scan_button.disabled = not (self.initialized and self.energized)
+        scan_button.label = "Stop" if scanning_in_progress else "Scan"
+        if not scan_button.disabled:
+            scan_button.add_class("enabled")
+        else:
+            scan_button.remove_class("enabled")
 
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
@@ -640,7 +663,7 @@ class StepperMotor(Static):
         yield Button("On", id="power_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
-        yield Static()
+        yield Button("Scan", id="run_stepper", variant="success", disabled=True)
         
         # Position displays
         yield CurrentPositionDisplay()
@@ -648,8 +671,6 @@ class StepperMotor(Static):
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
         
-        # Scan controls - enabled when ON
-        yield Button("Scan", id="run_stepper", variant="success", disabled=True)
         yield Input(
             placeholder="Number of positions to scan",
             id="divisions_stepper",
@@ -671,6 +692,7 @@ class StepperMotor(Static):
             tooltip="Enter the maximum motor position in steps (-2,147,483,648 to 2,147,483,647)",
             type="integer"
         )
+        yield Static()
         
         yield DivisionDisplay(id="division_display")
 
@@ -812,24 +834,13 @@ class StepperMotor(Static):
             
             # Update button label and style based on scan state
             if self.scan_state == ScanState.IDLE:
-                if self.current_division > 0:  # Scan completed
-                    run_button.label = "Done/ Re-Scan"
-                    run_button.variant = "success"
-                else:  # Ready to start
-                    run_button.label = "Scan"
-                    run_button.variant = "success"
-                # Only enable if parameters are valid
+                run_button.label = "Scan"  # Always show "Scan" instead of "Re-Scan"
+                run_button.variant = "success"
                 run_button.disabled = not self.validate_scan_parameters()
-            
-            elif self.scan_state == ScanState.MOVING:
-                run_button.label = "Scanning"
+            else:  # SCANNING or WAITING
+                run_button.label = "Stop"
                 run_button.variant = "warning"
-                run_button.disabled = False  # Always enable stop
-            
-            elif self.scan_state == ScanState.WAITING:
-                run_button.label = "Waiting"
-                run_button.variant = "warning"
-                run_button.disabled = False  # Always enable stop
+                run_button.disabled = False
             
         except:
             # Button might not be mounted yet, that's ok

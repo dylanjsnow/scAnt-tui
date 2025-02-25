@@ -132,3 +132,19 @@ Button#energize_stepper.energized {
     background: $error;
 }
 
+Button#zero_stepper.enabled {
+    border: tall $success;
+}
+
+Button#run_stepper {
+    text-style: bold;
+}
+
+Button#run_stepper.-disabled {
+    opacity: 0.3;
+}
+
+Button#run_stepper.enabled {
+    border: tall $success;
+}
+
