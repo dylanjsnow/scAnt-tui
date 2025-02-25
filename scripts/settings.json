@@ -1,24 +1,24 @@
 {
     "stepper_1": {
-        "divisions": "4",
-        "min_position": "-100000",
-        "max_position": "80000",
-        "current_limit": "21",
+        "divisions": "10",
+        "min_position": "0",
+        "max_position": "170000",
+        "current_limit": "9",
         "axis": "Forward",
         "serial": "00425332",
-        "max_speed": "1000"
+        "max_speed": "50000.0"
     },
     "stepper_2": {
-        "divisions": "5",
+        "divisions": "18",
         "min_position": "0",
-        "max_position": "100",
+        "max_position": "1800",
         "current_limit": "9",
         "axis": "Yaw",
-        "serial": "00425332",
+        "serial": "00425361",
         "max_speed": "1000.0"
     },
     "stepper_3": {
-        "divisions": "3",
+        "divisions": "5",
         "min_position": "-12000",
         "max_position": "12000",
         "current_limit": "22",

@@ -318,6 +318,9 @@ class StepperMotor(Static):
         self.set_interval(1 / 10.0, self.watch_target_position)
         self.set_interval(0.1, self.update_scan_state)
         self.set_timer(0.1, self.update_button_state)
+        
+        # Initialize control states
+        self.update_control_states()
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -376,94 +379,106 @@ class StepperMotor(Static):
         return current_pos == target_pos
 
     def zero_stepper(self):
-        """Move stepper motor to physical position 0, then reset position tracking"""
+        """Zero the stepper motor using Tic commands"""
         if not self.tic or not self.energized:
             return
-            
+        
         # If a scan is running, stop it first
         if self.scan_state != ScanState.IDLE:
             self.stop_scan()
-            
-        # First move to position 0
+        
+        # First halt the motor where it is
+        self.tic.halt_and_hold()
+        
+        # Set the current position as zero
+        self.tic.halt_and_set_position(0)
+        
+        # Update our tracking variables
+        self.current_position = 0
         self.target_position = 0
-        self.query_one(TargetPositionDisplay).target_position = self.target_position
+        self.query_one(CurrentPositionDisplay).current_position = 0
+        self.query_one(TargetPositionDisplay).target_position = 0
         
-        # Store reference to the timer so we can stop it if needed
-        if hasattr(self, '_zero_timer') and self._zero_timer:
-            self._zero_timer.stop()
-        self._zero_timer = None
-        
-        # Set a timer to check position periodically instead of blocking
-        def check_position():
-            if self.scan_state != ScanState.IDLE:
-                # Don't interfere with scanning
-                if hasattr(self, '_zero_timer'):
-                    self._zero_timer.stop()
-                self._zero_timer = None
-                return False
-                
-            if self.is_position_reached_exact():
-                # Once at 0, reset position tracking
-                self.tic.halt_and_set_position(0)
-                self.tic.exit_safe_start()
-                self.current_position = 0
-                self.query_one(CurrentPositionDisplay).current_position = self.current_position
-                self.moving = False
-                if hasattr(self, '_zero_timer'):
-                    self._zero_timer.stop()
-                self._zero_timer = None
-                return False  # Stop the timer
-            return True  # Continue checking
-            
-        self._zero_timer = self.set_interval(0.1, check_position)
+        # Re-enable motor movement
+        self.tic.exit_safe_start()
 
     def update_initialized(self, event: Button.Pressed) -> None:
+        """Handle power button press"""
         self.initialized = not self.initialized
-        for button in self.query(Button):
-            if button.id in ["energize_stepper", "deenergize_stepper", "zero_stepper"]:
-                button.disabled = not self.initialized
-        for input in self.query(Input):
-            if input.id in ["target_position_stepper", "max_position_stepper", "min_position_stepper"]:
-                input.disabled = not self.initialized
         if self.initialized:
             self.add_class("initialized")
             self.tic = TicUSB(serial_number=self.serial_number)
         else:
+            # If turning off, ensure motor is deenergized
+            if self.energized:
+                self.update_energized(event)
             self.remove_class("initialized")
             self.remove_class("energized")
-            self.remove_class("deenergized")
-            self.energized = False
-        for select in self.query(Select):
-            if select.id in ["axis_stepper", "serial_stepper", "zero_stepper", "divisions_stepper", "current_limit_stepper"]:
-                select.disabled = self.initialized
-        for button in self.query(Button):
-            if button.id in get_buttons_to_initialize():
-                button.disabled = not self.initialized 
-        for input in self.query(Input):
-            if input.id in get_inputs_to_initialize():
-                input.disabled = not self.initialized       
+            self.tic = None
+            
+        self.update_control_states()
 
     def update_energized(self, event: Button.Pressed) -> None:
-        self.remove_class("deenergized")
-        self.remove_class("initialized")
-        self.add_class("energized")
-        self.energized = True
-        self.tic.halt_and_set_position(self.current_position)
-        
-        # Set the current limit when energizing
-        if self.current_limit:
-            print(f"{self.id} current limit set to: {self.current_limit}")
-            self.tic.set_current_limit(int(self.current_limit))
+        """Handle energize button press"""
+        if self.energized:
+            # Deenergize
+            self.remove_class("energized")
+            self.energized = False
+            self.tic.deenergize()
+        else:
+            # Energize
+            self.add_class("energized")
+            self.energized = True
+            self.tic.halt_and_set_position(self.current_position)
             
-        self.tic.energize()
-        self.tic.exit_safe_start()
+            # Set the current limit when energizing
+            if self.current_limit:
+                print(f"{self.id} current limit set to: {self.current_limit}")
+                self.tic.set_current_limit(int(self.current_limit))
+                
+            self.tic.energize()
+            self.tic.exit_safe_start()
+            
+        self.update_control_states()
 
-    def update_deenergized(self, event: Button.Pressed) -> None:
-        self.remove_class("energized")
-        self.remove_class("initialized")
-        self.add_class("deenergized")
-        self.energized = False
-        self.tic.deenergize()
+    def update_control_states(self) -> None:
+        """Update all control states based on current motor state"""
+        # Configuration controls (only enabled when OFF)
+        config_controls = ["axis_stepper", "serial_stepper", "current_limit_stepper", "max_speed_stepper"]
+        for control_id in config_controls:
+            control = self.query_one(f"#{control_id}")
+            control.disabled = self.initialized
+            if not control.disabled:
+                control.add_class("enabled")
+            else:
+                control.remove_class("enabled")
+
+        # Power button
+        power_button = self.query_one("#power_stepper")
+        power_button.label = "Off" if self.initialized else "On"
+        power_button.add_class("enabled")
+
+        # Energize button
+        energize_button = self.query_one("#energize_stepper")
+        energize_button.disabled = not self.initialized
+        energize_button.label = "Deenergize" if self.energized else "Energize"
+        if not energize_button.disabled:
+            energize_button.add_class("enabled")
+        else:
+            energize_button.remove_class("enabled")
+
+        # Operation controls (enabled when ON)
+        operation_controls = ["zero_stepper", "run_stepper", "divisions_stepper",
+                            "min_position_stepper", "max_position_stepper"]
+        
+        for control_id in operation_controls:
+            control = self.query_one(f"#{control_id}")
+            # Only enable if initialized AND (not energized OR scan button)
+            control.disabled = not self.initialized or (self.energized and control_id != "run_stepper")
+            if not control.disabled:
+                control.add_class("enabled")
+            else:
+                control.remove_class("enabled")
 
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
@@ -483,12 +498,10 @@ class StepperMotor(Static):
         """Handle a button press"""
         print(self.id, " button pressed: ", event.button.id)
         
-        if event.button.id == "initialize_stepper":
+        if event.button.id == "power_stepper":
             self.update_initialized(event)
         elif event.button.id == "energize_stepper":
             self.update_energized(event)
-        elif event.button.id == "deenergize_stepper":
-            self.update_deenergized(event)
         elif event.button.id == "zero_stepper":
             self.zero_stepper()
         elif event.button.id == "run_stepper":
@@ -496,8 +509,6 @@ class StepperMotor(Static):
                 self.start_scan()
             else:
                 self.stop_scan()
-        elif event.button.id in get_target_position_buttons():
-            self.update_target_position(event)
             
     @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -587,7 +598,8 @@ class StepperMotor(Static):
                 self.tic.exit_safe_start()
 
     def compose(self) -> ComposeResult:
-        """Create child widgets for the stepper motor, with a top row of changeable variables and a bottom row of fixed values"""
+        """Create child widgets for the stepper motor"""
+        # Configuration controls - only enabled when OFF
         yield Select(
             options=((axis, axis) for axis in self.axes), 
             id="axis_stepper",
@@ -607,7 +619,7 @@ class StepperMotor(Static):
         yield Select(
             options=self.current_limit_options,
             id="current_limit_stepper",
-            value="2",  # Default to 174mA
+            value="2",
             allow_blank=False,
             prompt="Select current limit",
             tooltip="Set the maximum current for the stepper motor coils"
@@ -615,19 +627,23 @@ class StepperMotor(Static):
         yield Input(
             placeholder="Maximum speed (steps/s)",
             id="max_speed_stepper",
-            value="1000",  # Default to 1000 steps/s
-            disabled=True,
+            value="1000",
             tooltip="Set the maximum speed in steps per second (0.005 to 50000 steps/s)",
             type="number"
         )
-        yield Button("On/ Off", id="initialize_stepper", variant="default")
+        
+        # Main control buttons
+        yield Button("On", id="power_stepper", variant="default")
         yield Button("Energize", id="energize_stepper", variant="default", disabled=True)
         yield Button("Zero", id="zero_stepper", variant="primary", disabled=True)
-        yield Button("Deenergize", id="deenergize_stepper", variant="error", disabled=True)
+        
+        # Position displays
         yield CurrentPositionDisplay()
         yield TargetPositionDisplay()
         yield MinPositionDisplay()
         yield MaxPositionDisplay()
+        
+        # Scan controls - enabled when ON
         yield Button("Scan", id="run_stepper", variant="success", disabled=True)
         yield Input(
             placeholder="Number of positions to scan",

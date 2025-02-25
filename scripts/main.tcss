@@ -2,18 +2,41 @@ StepperMotor {
     layout: grid;
     grid-size: 4 5;
     background: $boost;
-    height: 25;
+    height: auto;
     margin: 1;
     min-width: 50;
-    padding: 1;
+    padding: 2;
+    grid-gutter: 1;
+}
+
+Select {
+    height: 5;
+    width: 100%;
+    color: $text;
+}
+
+Input {
+    height: 3;
+    width: 100%;
+    color: $text;
 }
 
 Button {
-    width: 12;
+    min-width: 12;
+    height: 3;
+    color: $text;
+}
+
+/* Static displays */
+CurrentPositionDisplay,
+TargetPositionDisplay,
+MinPositionDisplay,
+MaxPositionDisplay {
+    color: $text;
+    text-align: center;
 }
 
 Button#run_stepper {
-    width: 12;
     text-style: bold;
 }
 
@@ -56,14 +79,17 @@ Button#run_stepper.-error:hover {
     border: black;
 }
 
+.enabled {
+    border: tall green;
+}
+
 #division_display {
     height: 100%;
     width: 100%;
-    margin: 0;
     padding: 1 2;
     row-span: 4;
     column-span: 2;
-
+    color: $text;
 }
 
 #division_display > .bar--bar {
