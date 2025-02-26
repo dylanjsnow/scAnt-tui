@@ -148,3 +148,37 @@ Button#run_stepper.enabled {
     border: tall $success;
 }
 
+#control_buttons {
+    layout: horizontal;
+    background: $boost;
+    height: 5;
+    margin: 1;
+    padding: 1;
+}
+
+#control_buttons Button {
+    margin: 0 1;
+}
+
+Button#power_all {
+    background: $foreground 10%;
+    color: $text;
+}
+
+Button#energize_all {
+    background: $success;
+    color: $text;
+}
+
+Button#scan_all {
+    background: $success;
+    color: $text;
+    text-style: bold;
+}
+
+Button#stop_all {
+    background: $error;
+    color: $text;
+    text-style: bold;
+}
+
