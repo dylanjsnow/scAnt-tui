@@ -123,7 +123,7 @@ class DivisionDisplay(ProgressBar):
             total=100,  # Use percentage for total
             show_bar=True,
             show_percentage=True,
-            show_eta=True,
+            show_eta=False,  # Changed from True to False
             name="division_display",
             id="division_display"
         )
@@ -133,10 +133,21 @@ class DivisionDisplay(ProgressBar):
         self.target_position = 0
         self.start_position = 0  # Track start position of current movement
         self.position_tolerance = 0.05
+        
+        # Initialize with some progress to make it visible
+        self.update(progress=1)  # Set initial progress to 1% to make bar visible
 
     def update_progress(self, current_division: int, total_divisions: int, 
                        current_pos: float, target_pos: float, wait_time: float = 2.0) -> None:
         """Update progress based on both division and position progress"""
+        # Convert string values to numeric if needed
+        if isinstance(total_divisions, str) and total_divisions.isdigit():
+            total_divisions = int(total_divisions)
+        if isinstance(current_pos, str) and current_pos.replace('-', '').replace('.', '').isdigit():
+            current_pos = float(current_pos)
+        if isinstance(target_pos, str) and target_pos.replace('-', '').replace('.', '').isdigit():
+            target_pos = float(target_pos)
+            
         self.total_divisions = max(1, total_divisions)
         self.current_division = current_division
         self.current_position = float(current_pos)
@@ -168,7 +179,8 @@ class DivisionDisplay(ProgressBar):
         print(f"Progress: {total_progress:.1f}% (Division {self.current_division}/{self.total_divisions}, "
               f"Position: {self.current_position:.1f}/{self.target_position:.1f})")
         
-        self.update(progress=min(100, max(0, total_progress)))
+        # Ensure progress is at least 1% to make the bar visible
+        self.update(progress=max(1, min(100, total_progress)))
 
     def start_new_movement(self, start_pos: float, target_pos: float) -> None:
         """Called when starting movement to a new position"""
@@ -177,16 +189,30 @@ class DivisionDisplay(ProgressBar):
 
     def update_total_divisions(self, divisions: str) -> None:
         """Update the total number of divisions"""
-        if divisions and divisions.isdigit():
-            self.total_divisions = int(divisions)
+        if divisions:
+            try:
+                # Handle string values
+                if isinstance(divisions, str):
+                    if divisions.isdigit():
+                        self.total_divisions = int(divisions)
+                    else:
+                        self.total_divisions = 1
+                else:
+                    self.total_divisions = int(divisions)
+            except (ValueError, TypeError):
+                self.total_divisions = 1
         else:
-            self.total_divisions = 0
+            self.total_divisions = 1
+        
+        # Update with minimal progress to make bar visible
+        self.update(progress=1)
 
     def reset(self) -> None:
         """Reset the progress tracking"""
         self.current_division = 0
         self.start_position = 0
-        self.update(progress=0)
+        # Set to 1% instead of 0 to keep bar visible
+        self.update(progress=1)
 
 class ScanState(Enum):
     """States for the scanning process"""
@@ -498,9 +524,9 @@ class StepperMotor(Static):
             else:
                 control.remove_class("enabled")
 
-        # Scan button (enabled when ON and ENERGIZED)
+        # Scan button (enabled when ON and ENERGIZED, or when scanning is in progress)
         scan_button = self.query_one("#run_stepper")
-        scan_button.disabled = not (self.initialized and self.energized)
+        scan_button.disabled = not ((self.initialized and self.energized) or scanning_in_progress)
         scan_button.label = "Stop" if scanning_in_progress else "Scan"
         if not scan_button.disabled:
             scan_button.add_class("enabled")
@@ -694,7 +720,17 @@ class StepperMotor(Static):
         )
         yield Static()
         
-        yield DivisionDisplay(id="division_display")
+        # Add spacers to fill the grid properly
+        for _ in range(4):  # Add 4 spacers to fill the last row of the 4x5 grid
+            yield Static()
+        
+        # Now add the progress bar as the last widget, which will appear in the 6th row
+        progress_bar = DivisionDisplay(id="division_display")
+        progress_bar.styles.column_span = 4  # Span all columns
+        yield progress_bar
+        
+        # Initialize with visible progress
+        self.set_timer(0.2, lambda: progress_bar.update(progress=10))
 
     def get_division_positions(self) -> list[int]:
         """Calculate all positions to stop at during scan, returning integer positions"""

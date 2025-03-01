@@ -1,6 +1,6 @@
 StepperMotor {
     layout: grid;
-    grid-size: 4 5;
+    grid-size: 4 6;
     background: $boost;
     height: auto;
     margin: 1;
@@ -84,17 +84,19 @@ Button#run_stepper.-error:hover {
 }
 
 #division_display {
-    height: 100%;
+    height: 3;
     width: 100%;
-    padding: 1 2;
-    row-span: 4;
-    column-span: 2;
+    padding: 0 1;
+    column-span: 4;
+    row-span: 1;
     color: $text;
+    background: $success 10%;
+    border: solid $success;
 }
 
 #division_display > .bar--bar {
     color: $success;
-    background: $success 10%;
+    background: $success 30%;
 }
 
 #division_display > .bar--indeterminate {
