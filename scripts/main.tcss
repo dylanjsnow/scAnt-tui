@@ -83,7 +83,7 @@ Button#run_stepper.-error:hover {
     border: tall green;
 }
 
-#division_display {
+#progress_display {
     height: 3;
     width: 100%;
     padding: 0 1;
@@ -94,27 +94,27 @@ Button#run_stepper.-error:hover {
     border: solid $success;
 }
 
-#division_display > .bar--bar {
+#progress_display > .bar--bar {
     color: $success;
     background: $success 30%;
 }
 
-#division_display > .bar--indeterminate {
+#progress_display > .bar--indeterminate {
     color: $warning;
     background: $warning 10%;
 }
 
-#division_display > .bar--complete {
+#progress_display > .bar--complete {
     color: $success;
     background: $success 30%;
 }
 
-#division_display PercentageStatus {
+#progress_display PercentageStatus {
     color: $text;
     text-style: bold;
 }
 
-#division_display ETAStatus {
+#progress_display ETAStatus {
     color: $text-muted;
     text-style: italic;
 }
