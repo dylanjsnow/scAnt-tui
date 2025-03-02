@@ -20,18 +20,18 @@ class ScannerApp(App):
         
         # Main app container as a vertical layout
         with Vertical(id="app_container"):
-            # Camera manager at the top
-            yield CameraManager()
-            
-            # Control buttons for all motors
+            # Control buttons for all motors at the very top
             with Horizontal(id="control_buttons"):
                 yield Button("Power All", id="power_all")
                 yield Button("Energize All", id="energize_all")
                 yield Button("Scan All", id="scan_all")
                 yield Button("Stop All", id="stop_all")
             
-            # Stepper motors in a horizontal container to show side by side
-            with Horizontal(id="stepper_container"):
+            # Camera manager below the control buttons
+            yield CameraManager()
+            
+            # Stepper motors in a vertical container to show in a column
+            with Vertical(id="stepper_container"):
                 yield StepperMotor(id="stepper_1", name="Yaw")
                 yield StepperMotor(id="stepper_2", name="Tilt")
                 yield StepperMotor(id="stepper_3", name="Forward")

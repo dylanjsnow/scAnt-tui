@@ -429,6 +429,10 @@ class StepperMotor(Static):
             print(self.id, " axis: ", self.axis)
             self.settings.queue_save(stepper_num, "axis", event.value)
             
+            # Update the title to match the selected axis
+            title_label = self.query_one(f"#{self.id}_title", Label)
+            title_label.update(f"{event.value} Control")
+            
         elif event.select.id == "serial_stepper":
             self.serial_number = event.value
             print(self.id, " serial number: ", self.serial_number)

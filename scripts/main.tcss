@@ -5,25 +5,94 @@
     overflow: scroll;
 }
 
-/* Stepper container to show motors side by side */
+/* Control buttons at the top */
+#control_buttons {
+    layout: horizontal;
+    background: $boost;
+    height: 5;
+    margin: 1;
+    padding: 1;
+    width: 100%;
+}
+
+#control_buttons Button {
+    margin: 0 1;
+}
+
+/* Stepper container to show motors in a column */
 #stepper_container {
     width: 100%;
     height: auto;
-    layout: horizontal;
+    layout: vertical;
     overflow: scroll;
 }
 
-/* Adjust stepper motor to fit in horizontal layout */
+/* Adjust stepper motor to fit in vertical layout */
 StepperMotor {
     layout: grid;
     grid-size: 4 6;
     background: $boost;
     height: auto;
-    width: 1fr;  /* Take equal fraction of space */
-    min-width: 40;
+    width: 100%;
     margin: 1;
     padding: 2;
     grid-gutter: 1;
+}
+
+/* Camera manager adjustments - make it more compact */
+#camera_grid {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto auto auto auto auto;
+    grid-columns: 1fr;
+    padding: 1;
+    width: 100%;
+    min-height: 30;
+    max-height: 40;
+    background: $panel;
+    border: tall $primary;
+    margin-bottom: 1;
+}
+
+/* Make the file naming grid more compact */
+#file_naming_grid {
+    layout: grid;
+    grid-size: 2;
+    grid-rows: auto auto auto auto;
+    grid-columns: 1fr 3fr;
+    padding: 1;
+    width: 100%;
+    height: auto;
+    margin: 1 0;
+    background: $surface;
+    border: solid $primary-darken-2;
+    min-height: 15;
+    max-height: 20;
+    overflow-y: auto;
+}
+
+/* Ensure the stepper title spans correctly */
+.stepper-title {
+    text-align: center;
+    width: 100%;
+    padding: 1;
+    background: $boost;
+    color: $text;
+    text-style: bold;
+    column-span: 4;
+}
+
+/* Make input fields more compact */
+.field-input {
+    width: 100%;
+    height: 2;
+    margin: 0 1;
+}
+
+/* Make the app scrollable */
+Screen {
+    overflow: scroll;
+    height: 100%;
 }
 
 /* Camera manager adjustments */
@@ -210,18 +279,6 @@ Button#run_stepper.enabled {
     border: tall $success;
 }
 
-#control_buttons {
-    layout: horizontal;
-    background: $boost;
-    height: 5;
-    margin: 1;
-    padding: 1;
-}
-
-#control_buttons Button {
-    margin: 0 1;
-}
-
 Button#power_all {
     background: $foreground 10%;
     color: $text;
@@ -321,12 +378,6 @@ Button#stop_all {
 .readonly {
     background: $panel-darken-1;
     color: $text-muted;
-}
-
-/* Make the app scrollable */
-Screen {
-    overflow: scroll;
-    height: 100%;
 }
 
 /* Ensure the app container allows scrolling */
