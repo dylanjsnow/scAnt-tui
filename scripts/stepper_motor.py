@@ -1,5 +1,5 @@
 from typing import Optional, Tuple, List
-from textual.widgets import Static, Button, Input, Select
+from textual.widgets import Static, Button, Input, Select, Label
 from textual.reactive import reactive
 from settings import SettingsManager
 from scan import ScanManager
@@ -448,6 +448,9 @@ class StepperMotor(Static):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the stepper motor"""
+        # Add a title for the stepper motor
+        yield Label(f"{self.name} Control", id=f"{self.id}_title", classes="stepper-title")
+        
         # Configuration controls - only enabled when OFF
         yield Select(
             options=((axis, axis) for axis in self.axes), 

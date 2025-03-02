@@ -1,25 +1,41 @@
-from textual.app import App
-from textual.widgets import Header, Footer, Button
-from textual.containers import Container
-from stepper_motor import StepperMotor
 from textual.app import App, ComposeResult
+from textual.containers import Grid, Horizontal, Vertical
+from textual.widgets import Header, Footer, Button
+from stepper_motor import StepperMotor
 from camera import CameraManager
-class Scant(App):
-    """The main application."""
-    CSS_PATH = "main.tcss"
+from utils import ScanState
 
+class ScannerApp(App):
+    """A Textual app for controlling stepper motors and camera."""
+    
+    CSS_PATH = "main.tcss"
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("d", "toggle_dark", "Toggle Dark Mode"),
+    ]
+    
     def compose(self) -> ComposeResult:
-        """Create child widgets for the app"""
+        """Create child widgets for the app."""
         yield Header()
-        yield Container(
-            Button("On All", id="power_all", variant="default"),
-            Button("Energize All", id="energize_all", variant="default"),
-            Button("Scan All", id="scan_all", variant="success"),
-            Button("Stop All", id="stop_all", variant="error"),
-            id="control_buttons"
-        )
-        yield CameraManager(id="camera_manager")
-        yield Container(*[StepperMotor(id=f"stepper_motor_{i+1}") for i in range(3)], id="motors")
+        
+        # Main app container as a vertical layout
+        with Vertical(id="app_container"):
+            # Camera manager at the top
+            yield CameraManager()
+            
+            # Control buttons for all motors
+            with Horizontal(id="control_buttons"):
+                yield Button("Power All", id="power_all")
+                yield Button("Energize All", id="energize_all")
+                yield Button("Scan All", id="scan_all")
+                yield Button("Stop All", id="stop_all")
+            
+            # Stepper motors in a horizontal container to show side by side
+            with Horizontal(id="stepper_container"):
+                yield StepperMotor(id="stepper_1", name="Yaw")
+                yield StepperMotor(id="stepper_2", name="Tilt")
+                yield StepperMotor(id="stepper_3", name="Forward")
+        
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -52,5 +68,5 @@ class Scant(App):
                     scan_button.press()
 
 if __name__ == "__main__":
-    app = Scant()
+    app = ScannerApp()
     app.run()
