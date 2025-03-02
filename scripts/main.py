@@ -3,7 +3,7 @@ from textual.widgets import Header, Footer, Button
 from textual.containers import Container
 from stepper_motor import StepperMotor
 from textual.app import App, ComposeResult
-
+from camera import CameraManager
 class Scant(App):
     """The main application."""
     CSS_PATH = "main.tcss"
@@ -18,6 +18,7 @@ class Scant(App):
             Button("Stop All", id="stop_all", variant="error"),
             id="control_buttons"
         )
+        yield CameraManager(id="camera_manager")
         yield Container(*[StepperMotor(id=f"stepper_motor_{i+1}") for i in range(3)], id="motors")
         yield Footer()
 

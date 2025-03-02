@@ -184,3 +184,76 @@ Button#stop_all {
     text-style: bold;
 }
 
+/* Add these styles for the CameraManager component */
+
+#camera_grid {
+    layout: grid;
+    grid-size: 1;
+    grid-rows: auto auto auto auto;
+    grid-columns: 1fr;
+    padding: 1;
+    width: 100%;
+    height: auto;
+    background: $panel;
+    border: tall $primary;
+    margin-bottom: 1;
+}
+
+#camera_title {
+    text-align: center;
+    width: 100%;
+    padding: 1;
+    background: $boost;
+    color: $text;
+    text-style: bold;
+}
+
+#camera_selection_area {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1;
+}
+
+#camera_controls {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1;
+}
+
+#camera_status_area {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1;
+}
+
+#camera_select {
+    width: 80%;
+    margin: 1 0;
+}
+
+#take_photo_btn {
+    margin: 1 0;
+}
+
+#camera_status {
+    width: 100%;
+    text-align: center;
+    padding: 1;
+}
+
+.camera-select {
+    min-width: 30;
+}
+
+.action-button {
+    min-width: 15;
+}
+
+.info-label, .status-label {
+    text-align: center;
+    width: 100%;
+}
+

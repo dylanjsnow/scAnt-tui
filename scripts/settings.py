@@ -137,7 +137,7 @@ class SettingsManager:
                 # Wait for new settings to save
                 settings = self.save_queue.get()
                 print(f"Saving settings to {self.settings_file}:")
-                print(json.dumps(settings, indent=2))
+                # print(json.dumps(settings, indent=2))
                 
                 # Write to temporary file first
                 temp_file = self.settings_file.with_suffix('.tmp')
