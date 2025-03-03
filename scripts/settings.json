@@ -21,8 +21,8 @@
         "divisions": "5",
         "min_position": "-12000",
         "max_position": "12000",
-        "current_limit": "22",
-        "axis": "Tilt",
+        "current_limit": "2",
+        "axis": "Yaw",
         "serial": "00425337",
         "max_speed": "1000.0"
     }

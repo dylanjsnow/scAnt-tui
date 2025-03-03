@@ -43,15 +43,15 @@ StepperMotor {
 #camera_grid {
     layout: grid;
     grid-size: 1;
-    grid-rows: auto auto auto auto auto;
+    grid-rows: auto auto auto auto auto auto;
     grid-columns: 1fr;
     padding: 1;
     width: 100%;
-    min-height: 30;
-    max-height: 40;
+    min-height: 40;
     background: $panel;
     border: tall $primary;
     margin-bottom: 1;
+    overflow: auto;
 }
 
 /* Make the file naming grid more compact */
@@ -99,7 +99,7 @@ Screen {
 #camera_grid {
     layout: grid;
     grid-size: 1;
-    grid-rows: auto auto auto auto auto;
+    grid-rows: auto auto auto auto auto auto;
     grid-columns: 1fr;
     padding: 1;
     width: 100%;
@@ -384,5 +384,54 @@ Button#stop_all {
 #app-grid {
     height: auto;
     overflow: scroll;
+}
+
+/* EXIF data display - improved scrolling */
+#exif_container {
+    width: 100%;
+    height: auto;
+    max-height: 300;  /* Increased height */
+    background: $surface;
+    border: solid $primary-darken-2;
+    margin: 1 0;
+    padding: 1;
+    overflow: auto;  /* Ensure container is scrollable */
+}
+
+#exif_display {
+    width: 100%;
+    height: auto;
+    min-height: 200;  /* Increased minimum height */
+    max-height: 280;  /* Increased maximum height */
+    background: $surface-darken-1;
+    color: $text;
+    border: none;
+    overflow: auto;  /* Ensure text area is scrollable */
+}
+
+#exif_controls {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1;
+}
+
+#update_exif_btn, #toggle_exif_btn {
+    margin: 0 1;
+}
+
+/* EXIF fields grid */
+#exif_fields_grid {
+    layout: grid;
+    grid-size: 2;
+    grid-rows: 5;  /* Just enough for the basic fields we've added */
+    grid-columns: 1fr 3fr;
+    padding: 1;
+    width: 100%;
+    height: auto;
+    margin: 1 0;
+    background: $surface;
+    border: solid $primary-darken-2;
+    overflow: auto;
 }
 
