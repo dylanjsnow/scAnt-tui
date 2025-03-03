@@ -31,12 +31,20 @@ class CameraManager(Static):
         self._date_timer = None
         self.exif_display_visible = False
         
+        # Additional metadata fields
+        self.project_name = ""
+        self.subject_id = ""  # Changed from specimen_id to subject_id
+        self.scale = ""
+        self.copyright = ""
+        self.notes = ""
+        self.software = "MacroScans v1.0"  # Default software name
+        
         # Default EXIF metadata
         self.exif_data = {
             'Make': 'Scanner3D',
             'Model': 'ScannerApp',
+            'Software': self.software,  # Use the software field
             'Orientation': 1,  # top-left
-            'Software': 'ScannerApp v1.0',
             'DateTime': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
             'YCbCrPositioning': 1,  # centered
             'Compression': 6,  # JPEG compression
@@ -88,7 +96,7 @@ class CameraManager(Static):
                 else:
                     yield Label("No cameras detected", id="no_camera_label", classes="info-label")
             
-            # File naming options
+            # File naming and metadata options
             with Grid(id="file_naming_grid", classes="file-naming-section"):
                 # Date (auto-generated, read-only)
                 yield Label("Date:", classes="field-label")
@@ -124,6 +132,60 @@ class CameraManager(Static):
                     id="detail_input",
                     disabled=True,
                     classes="field-input readonly"
+                )
+                
+                # Project Name (user input)
+                yield Label("Project:", classes="field-label")
+                yield Input(
+                    value=self.project_name,
+                    id="project_input",
+                    placeholder="Enter project name",
+                    classes="field-input"
+                )
+                
+                # Subject ID (user input)
+                yield Label("Subject ID:", classes="field-label")
+                yield Input(
+                    value=self.subject_id,
+                    id="subject_id_input",
+                    placeholder="Enter subject ID",
+                    classes="field-input"
+                )
+                
+                # Scale/Magnification (user input)
+                yield Label("Scale:", classes="field-label")
+                yield Input(
+                    value=self.scale,
+                    id="scale_input",
+                    placeholder="Enter scale/magnification",
+                    classes="field-input"
+                )
+                
+                # Software name (user input)
+                yield Label("Software:", classes="field-label")
+                yield Input(
+                    value=self.software,
+                    id="software_input",
+                    placeholder="Enter software name",
+                    classes="field-input"
+                )
+                
+                # Copyright (user input)
+                yield Label("Copyright:", classes="field-label")
+                yield Input(
+                    value=self.copyright,
+                    id="copyright_input",
+                    placeholder="Enter copyright info",
+                    classes="field-input"
+                )
+                
+                # Notes (user input)
+                yield Label("Notes:", classes="field-label")
+                yield Input(
+                    value=self.notes,
+                    id="notes_input",
+                    placeholder="Enter additional notes",
+                    classes="field-input"
                 )
             
             # EXIF data controls
@@ -710,3 +772,81 @@ class CameraManager(Static):
         """Clean up when widget is removed."""
         if self._date_timer:
             self._date_timer.stop()
+
+    def save_image_with_exif(self, img, filename):
+        """Save an image with comprehensive EXIF metadata."""
+        try:
+            # Create EXIF data structure
+            exif = Image.Exif()
+            
+            # Basic camera info
+            exif[ExifTags.Base.Make] = self.exif_data['Make']
+            exif[ExifTags.Base.Model] = self.exif_data['Model']
+            exif[ExifTags.Base.Software] = self.software  # Use the software field
+            
+            # User-provided metadata
+            exif[ExifTags.Base.ImageDescription] = self.subject
+            exif[ExifTags.Base.Artist] = self.owner
+            
+            # Create a UserComment field that includes the detail information
+            # UserComment requires special encoding according to EXIF spec
+            user_comment = f"Detail: {self.detail}"
+            if self.project_name:
+                user_comment += f"\nProject: {self.project_name}"
+            if self.subject_id:  # Changed from specimen_id to subject_id
+                user_comment += f"\nSubject ID: {self.subject_id}"
+            if self.scale:
+                user_comment += f"\nScale: {self.scale}"
+            if self.notes:
+                user_comment += f"\nNotes: {self.notes}"
+            
+            # EXIF UserComment must be encoded with specific header
+            encoded_comment = b'ASCII\0\0\0' + user_comment.encode('ascii', 'replace')
+            exif[ExifTags.Base.UserComment] = encoded_comment
+            
+            # Copyright information
+            if self.copyright:
+                exif[ExifTags.Base.Copyright] = self.copyright
+            
+            # Date and time
+            current_time = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+            exif[ExifTags.Base.DateTime] = current_time
+            exif[ExifTags.Base.DateTimeOriginal] = current_time
+            exif[ExifTags.Base.DateTimeDigitized] = current_time
+            
+            # Image dimensions
+            exif[ExifTags.Base.PixelXDimension] = img.width
+            exif[ExifTags.Base.PixelYDimension] = img.height
+            
+            # Technical camera settings (if available)
+            if hasattr(self, 'exposure_time') and self.exposure_time:
+                if "/" in self.exposure_time:
+                    num, denom = self.exposure_time.split("/")
+                    exif[ExifTags.Base.ExposureTime] = (int(num), int(denom))
+            
+            if hasattr(self, 'f_number') and self.f_number:
+                try:
+                    f_num = float(self.f_number)
+                    exif[ExifTags.Base.FNumber] = (int(f_num * 10), 10)
+                except ValueError:
+                    pass
+                
+            if hasattr(self, 'focal_length') and self.focal_length:
+                try:
+                    focal = float(self.focal_length)
+                    exif[ExifTags.Base.FocalLength] = (int(focal * 10), 10)
+                except ValueError:
+                    pass
+            
+            # Standard defaults
+            exif[ExifTags.Base.ColorSpace] = 1  # sRGB
+            exif[ExifTags.Base.XResolution] = (72, 1)
+            exif[ExifTags.Base.YResolution] = (72, 1)
+            exif[ExifTags.Base.ResolutionUnit] = 2  # inches
+            
+            # Save the image with EXIF data
+            img.save(filename, exif=exif)
+            return True
+        except Exception as e:
+            print(f"Error saving image with EXIF data: {e}")
+            return False
