@@ -7,6 +7,8 @@ from textual.containers import Horizontal, Vertical, Grid
 from textual.widgets import Button, Label, Select, Static, Input
 from textual.reactive import reactive
 from textual import work
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 class CameraManager(Static):
     """A widget to manage camera operations."""
@@ -95,9 +97,9 @@ class CameraManager(Static):
     
     def on_mount(self) -> None:
         """Handle the mount event."""
-        # Disable the take photo button if no cameras are available
+        # Enable the take photo button even if no cameras are available
         take_photo_btn = self.query_one("#take_photo_btn", Button)
-        take_photo_btn.disabled = len(self.cameras) == 0
+        take_photo_btn.disabled = False
         
         # Update the date field with current timestamp
         self.update_date_field()
@@ -164,7 +166,7 @@ class CameraManager(Static):
             if self.selected_camera:
                 self.take_photo()
             else:
-                self.status = "Please select a camera first"
+                self.take_empty_photo()
     
     def get_connected_cameras(self) -> list:
         """Get a list of connected cameras using gphoto2."""
@@ -199,6 +201,68 @@ class CameraManager(Static):
             self.status = f"Error: {str(e)}"
             return []
     
+    def create_empty_image(self, filename: str) -> None:
+        """Create an empty image with text indicating no camera was connected."""
+        try:
+            # Create a blank image with gray background
+            width, height = 1280, 720
+            img = Image.new('RGB', (width, height), color=(200, 200, 200))
+            draw = ImageDraw.Draw(img)
+            
+            # Add text to the image
+            text = "No camera connected"
+            text_position = (width // 2, height // 2)
+            
+            # Try to use a system font, fall back to default if not available
+            try:
+                font = ImageFont.truetype("Arial", 36)
+            except IOError:
+                font = ImageFont.load_default()
+            
+            # Calculate text size to center it
+            text_width = draw.textlength(text, font=font)
+            text_position = (width // 2 - text_width // 2, height // 2 - 18)
+            
+            # Draw the text
+            draw.text(text_position, text, fill=(0, 0, 0), font=font)
+            
+            # Add metadata text
+            metadata_text = f"Date: {self.current_date}\nSubject: {self.subject}\nOwner: {self.owner}\nDetail: {self.detail}"
+            metadata_position = (20, height - 100)
+            draw.text(metadata_position, metadata_text, fill=(0, 0, 0), font=font)
+            
+            # Save the image
+            img.save(filename)
+            print(f"Created empty image: {filename}")
+            return True
+        except Exception as e:
+            print(f"Error creating empty image: {e}")
+            return False
+    
+    @work
+    async def take_empty_photo(self) -> None:
+        """Take a photo without a camera by creating an empty image."""
+        # Create results directory if it doesn't exist
+        os.makedirs("./results", exist_ok=True)
+        
+        # Update date and detail fields before taking the photo
+        self.update_date_field()
+        self.update_detail_field()
+        
+        # Generate filename with all components
+        filename = f"./results/{self.current_date}_{self.subject}_{self.owner}_{self.detail}.jpg"
+        
+        self.status = "Creating empty image..."
+        
+        try:
+            # Create an empty image with metadata
+            if self.create_empty_image(filename):
+                self.status = f"Empty image saved to {filename}"
+            else:
+                self.status = "Error creating empty image"
+        except Exception as e:
+            self.status = f"Error: {str(e)}"
+    
     @work
     async def take_photo(self) -> None:
         """Take a photo with the selected camera."""
@@ -228,9 +292,13 @@ class CameraManager(Static):
                 self.status = f"Photo saved to {filename}"
             else:
                 self.status = f"Error capturing photo: {result.stderr}"
+                # Fall back to empty image if camera capture fails
+                self.take_empty_photo()
         
         except Exception as e:
             self.status = f"Error: {str(e)}"
+            # Fall back to empty image if camera capture fails
+            self.take_empty_photo()
             
     def on_unmount(self) -> None:
         """Clean up when widget is removed."""
