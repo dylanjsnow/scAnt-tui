@@ -31,46 +31,49 @@ class CameraManager(Static):
         self._date_timer = None
         self.exif_display_visible = False
         
+        # EXIF display format (True for string, False for binary)
+        self.exif_string_format = True
+        
         # Additional metadata fields
         self.project_name = ""
-        self.subject_id = ""  # Changed from specimen_id to subject_id
+        self.subject_id = ""
         self.scale = ""
         self.copyright = ""
         self.notes = ""
-        self.software = "MacroScans v1.0"  # Default software name
+        self.software = "MacroScans v1.0"
         
         # Default EXIF metadata
         self.exif_data = {
             'Make': 'Scanner3D',
             'Model': 'ScannerApp',
-            'Software': self.software,  # Use the software field
+            'Software': self.software,
             'Orientation': 1,  # top-left
             'DateTime': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
             'YCbCrPositioning': 1,  # centered
-            'Compression': 6,  # JPEG compression
             'XResolution': (72, 1),
             'YResolution': (72, 1),
-            'ResolutionUnit': 2,  # Inch
-            'ExposureTime': (1, 100),  # 1/100 s
+            'ResolutionUnit': 2,  # inches
+            'ExposureTime': (1, 100),  # 1/100 second
             'FNumber': (40, 10),  # f/4.0
-            'ExposureProgram': 2,  # Normal program
-            'ExifVersion': b'0221',  # Exif version 2.21
+            'ExposureProgram': 1,  # Manual
+            'ExifVersion': b'0231',
             'DateTimeOriginal': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
             'DateTimeDigitized': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-            'ComponentsConfiguration': b'\x01\x02\x03\x00',  # Y Cb Cr –
-            'CompressedBitsPerPixel': (401, 100),  # 4.01
-            'ExposureBiasValue': (0, 10),  # 0.0
-            'MaxApertureValue': (20, 10),  # 2.00
+            'ComponentsConfiguration': b'\x01\x02\x03\x00',  # YCbCr
+            'CompressedBitsPerPixel': (4, 1),
+            'ExposureBiasValue': (0, 1),
+            'MaxApertureValue': (20, 10),
             'MeteringMode': 5,  # Pattern
-            'Flash': 0,  # Flash did not fire
-            'FocalLength': (201, 10),  # 20.1 mm
-            'FlashpixVersion': b'0100',  # FlashPix version 1.0
+            'Flash': 16,  # No flash
+            'FocalLength': (200, 10),  # 20mm
+            'MakerNote': b'',
+            'FlashpixVersion': b'0100',
             'ColorSpace': 1,  # sRGB
             'PixelXDimension': 1280,
             'PixelYDimension': 720,
             'FileSource': b'\x03',  # DSC
             'InteroperabilityIndex': 'R98',
-            'InteroperabilityVersion': b'0100'
+            'InteroperabilityVersion': b'0100',
         }
         
     def compose(self) -> ComposeResult:
@@ -191,25 +194,12 @@ class CameraManager(Static):
             # EXIF data controls
             with Horizontal(id="exif_controls", classes="control-row"):
                 yield Button("Update Details from Camera", id="update_exif_btn", variant="primary", classes="action-button")
+                yield Button("Toggle EXIF Format", id="toggle_exif_format_btn", variant="default", classes="action-button")
             
-            # Basic EXIF data fields
-            with Grid(id="exif_fields_grid", classes="exif-fields-section"):
-                # Camera info
-                yield Label("Make:", classes="field-label")
-                yield Input(value=self.exif_data.get('Make', ''), id="make_input", classes="field-input")
-                
-                yield Label("Model:", classes="field-label")
-                yield Input(value=self.exif_data.get('Model', ''), id="model_input", classes="field-input")
-                
-                # Exposure info
-                yield Label("Exposure Time:", classes="field-label")
-                yield Input(value="1/100", id="exposure_time_input", classes="field-input")
-                
-                yield Label("F-Number:", classes="field-label")
-                yield Input(value="4.0", id="f_number_input", classes="field-input")
-                
-                yield Label("Focal Length:", classes="field-label")
-                yield Input(value="20.1", id="focal_length_input", classes="field-input")
+            # EXIF extraction status - using a TextArea instead of a Label for better scrolling
+            with Vertical(id="exif_status_container", classes="status-container"):
+                yield Label("EXIF Data", id="exif_status_title", classes="section-title")
+                yield Static("EXIF data will be shown here when extracted", id="exif_status", classes="exif-status")
             
             # Camera control buttons
             with Horizontal(id="camera_controls", classes="control-row"):
@@ -362,36 +352,54 @@ class CameraManager(Static):
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
-        if event.button.id == "take_photo_btn":
-            if self.selected_camera:
-                self.take_photo()
-            else:
-                self.take_empty_photo()
-        elif event.button.id == "update_exif_btn":
-            if self.selected_camera:
-                self.extract_camera_exif()
-            else:
-                self.status = "No camera selected for EXIF extraction"
-        elif event.button.id == "toggle_exif_btn":
-            self.toggle_exif_display()
+        button_id = event.button.id
+        
+        if button_id == "take_photo_btn":
+            self.take_photo()
+        elif button_id == "update_exif_btn":
+            self.extract_camera_exif()
+        elif button_id == "toggle_exif_format_btn":
+            self.toggle_exif_format()
     
-    def toggle_exif_display(self) -> None:
-        """Toggle the visibility of the EXIF data display."""
-        exif_container = self.query_one("#exif_container")
+    def toggle_exif_format(self):
+        """Toggle between string and binary representation of EXIF data."""
+        self.exif_string_format = not self.exif_string_format
         
-        # Toggle visibility
-        self.exif_display_visible = not self.exif_display_visible
-        exif_container.display = self.exif_display_visible
+        # Update the button text
+        toggle_btn = self.query_one("#toggle_exif_format_btn", Button)
+        toggle_btn.label = f"Show {'String' if not self.exif_string_format else 'Binary'} Format"
         
-        # If becoming visible, update the display with current EXIF data
-        if self.exif_display_visible:
-            exif_display = self.query_one("#exif_display", TextArea)
-            exif_display.text = self.format_exif_data()
-        else:
-            # If becoming hidden, update EXIF data from the display
-            self.update_exif_from_display()
+        # Display the current EXIF data in the selected format
+        self.display_exif_data()
+    
+    def display_exif_data(self):
+        """Display the current EXIF data in the selected format."""
+        exif_status = self.query_one("#exif_status", Static)
         
-        self.status = f"EXIF data display {'shown' if self.exif_display_visible else 'hidden'}"
+        # Clear the current display
+        exif_status.update("Current EXIF Data:")
+        
+        # Format and display each EXIF field
+        for tag_name, value in self.exif_data.items():
+            if self.exif_string_format:
+                # String representation
+                if isinstance(value, bytes):
+                    # Convert bytes to a readable hex string
+                    formatted_value = value.hex()
+                    self.update_exif_status(f"{tag_name}: 0x{formatted_value} (bytes)")
+                elif isinstance(value, tuple) and len(value) == 2:
+                    # Format rational numbers
+                    if value[1] == 1:
+                        formatted_value = str(value[0])
+                    else:
+                        formatted_value = f"{value[0]}/{value[1]} ({value[0]/value[1]:.2f})"
+                    self.update_exif_status(f"{tag_name}: {formatted_value}")
+                else:
+                    # Regular string representation
+                    self.update_exif_status(f"{tag_name}: {value}")
+            else:
+                # Binary/raw representation
+                self.update_exif_status(f"{tag_name}: {repr(value)}")
     
     def get_connected_cameras(self) -> list:
         """Get a list of connected cameras using gphoto2."""
@@ -434,12 +442,18 @@ class CameraManager(Static):
             return
         
         self.status = "Extracting camera details..."
+        
+        # Clear the EXIF status area
+        exif_status = self.query_one("#exif_status", Static)
+        exif_status.update("Starting EXIF extraction...")
+        
         print(f"Starting EXIF extraction for camera: {self.selected_camera}")
         
         try:
             # Run gphoto2 command to get camera summary
             print("Getting camera summary...")
             self.status = "Getting camera summary..."
+            self.update_exif_status("Getting camera summary...")
             
             # Create and run the process
             process = await create_subprocess_exec(
@@ -461,18 +475,17 @@ class CameraManager(Static):
                 if make_match:
                     self.exif_data['Make'] = make_match.group(1).strip()
                     print(f"Extracted camera make: {self.exif_data['Make']}")
-                    # Safely update UI if element exists
-                    self.update_input_field("make_input", self.exif_data['Make'])
+                    self.update_exif_status(f"Make: {self.exif_data['Make']}")
                     
                 if model_match:
                     self.exif_data['Model'] = model_match.group(1).strip()
                     print(f"Extracted camera model: {self.exif_data['Model']}")
-                    # Safely update UI if element exists
-                    self.update_input_field("model_input", self.exif_data['Model'])
+                    self.update_exif_status(f"Model: {self.exif_data['Model']}")
                 
                 # Try to get camera configuration for more detailed EXIF data
                 print("Getting camera configuration list...")
                 self.status = "Getting camera configuration..."
+                self.update_exif_status("Getting camera configuration...")
                 
                 # Run the list-config command asynchronously
                 config_process = await create_subprocess_exec(
@@ -485,6 +498,7 @@ class CameraManager(Static):
                 if config_process.returncode == 0:
                     config_list = config_stdout.decode('utf-8').strip().split('\n')
                     print(f"Found {len(config_list)} configuration items")
+                    self.update_exif_status(f"Found {len(config_list)} configuration items")
                     
                     # Extract specific configuration values that map to EXIF data
                     config_count = 0
@@ -495,6 +509,7 @@ class CameraManager(Static):
                         config_count += 1
                         print(f"Processing config item {config_count}/{len(config_list)}: {config_item}")
                         self.status = f"Processing config: {config_item}"
+                        self.update_exif_status(f"Processing: {config_item}")
                         
                         # Get the value for this configuration item asynchronously
                         get_config_process = await create_subprocess_exec(
@@ -519,81 +534,108 @@ class CameraManager(Static):
                                 current_value = current_value_match.group(1).strip()
                                 print(f"Current value: {current_value}")
                                 
-                                # For known enum types, show the human-readable interpretation
-                                if "orientation" in config_item.lower():
-                                    orientation_map = {
-                                        "1": "top-left (normal)",
-                                        "2": "top-right (mirrored)",
-                                        "3": "bottom-right (180° rotation)",
-                                        "4": "bottom-left (180° rotation, mirrored)",
-                                        "5": "left-top (90° CCW rotation, mirrored)",
-                                        "6": "right-top (90° CW rotation)",
-                                        "7": "right-bottom (90° CW rotation, mirrored)",
-                                        "8": "left-bottom (90° CCW rotation)"
-                                    }
-                                    if current_value in orientation_map:
-                                        print(f"Orientation interpretation: {orientation_map[current_value]}")
+                                # Map camera configuration to EXIF data
+                                if "shutterspeed" in config_item.lower() or "exposuretime" in config_item.lower():
+                                    try:
+                                        # Try to parse as a fraction (e.g., "1/100")
+                                        if "/" in current_value:
+                                            num, denom = current_value.split("/")
+                                            self.exif_data['ExposureTime'] = (int(num), int(denom))
+                                            self.update_exif_status(f"ExposureTime: {current_value}")
+                                    except (ValueError, IndexError):
+                                        print(f"Could not parse exposure time: {current_value}")
+                                
+                                elif "aperture" in config_item.lower() or "fnumber" in config_item.lower():
+                                    try:
+                                        aperture_value = current_value
+                                        if aperture_value.startswith("f/"):
+                                            aperture_value = aperture_value[2:]
+                                        self.exif_data['FNumber'] = (int(float(aperture_value) * 10), 10)
+                                        self.update_exif_status(f"FNumber: {current_value}")
+                                    except (ValueError, IndexError):
+                                        print(f"Could not parse aperture: {current_value}")
+                                
+                                elif "iso" in config_item.lower():
+                                    try:
+                                        iso_value = int(current_value)
+                                        self.exif_data['ISOSpeedRatings'] = iso_value
+                                        self.update_exif_status(f"ISO: {current_value}")
+                                    except (ValueError, IndexError):
+                                        print(f"Could not parse ISO: {current_value}")
+                                
+                                elif "focallength" in config_item.lower():
+                                    try:
+                                        focal_value = current_value
+                                        if "mm" in focal_value:
+                                            focal_value = focal_value.replace("mm", "").strip()
+                                        self.exif_data['FocalLength'] = (int(float(focal_value) * 10), 10)
+                                        self.update_exif_status(f"FocalLength: {current_value}")
+                                    except (ValueError, IndexError):
+                                        print(f"Could not parse focal length: {current_value}")
                                 
                                 elif "meteringmode" in config_item.lower():
+                                    # Map camera metering mode to EXIF metering mode
                                     metering_map = {
-                                        "0": "Unknown",
-                                        "1": "Average",
-                                        "2": "Center-weighted average",
-                                        "3": "Spot",
-                                        "4": "Multi-spot",
-                                        "5": "Pattern",
-                                        "6": "Partial",
-                                        "255": "Other"
+                                        "Evaluative": 5,  # Pattern
+                                        "Center-weighted": 2,  # Center-weighted average
+                                        "Spot": 3,  # Spot
+                                        "Partial": 6,  # Partial
                                     }
                                     if current_value in metering_map:
-                                        print(f"Metering mode interpretation: {metering_map[current_value]}")
-                                
-                                elif "flash" in config_item.lower():
-                                    flash_map = {
-                                        "0": "No Flash",
-                                        "1": "Fired",
-                                        "5": "Fired, Return not detected",
-                                        "7": "Fired, Return detected",
-                                        "8": "On, Did not fire",
-                                        "9": "On, Fired",
-                                        "16": "Off, Did not fire",
-                                        "24": "Auto, Did not fire",
-                                        "25": "Auto, Fired",
-                                        "32": "No flash function",
-                                        "65": "Fired, Red-eye reduction",
-                                        "73": "On, Red-eye reduction",
-                                        "88": "Auto, Did not fire, Red-eye reduction",
-                                        "89": "Auto, Fired, Red-eye reduction"
-                                    }
-                                    if current_value in flash_map:
-                                        print(f"Flash interpretation: {flash_map[current_value]}")
+                                        self.exif_data['MeteringMode'] = metering_map[current_value]
+                                        self.update_exif_status(f"MeteringMode: {current_value}")
                                 
                                 elif "colorspace" in config_item.lower():
-                                    colorspace_map = {
-                                        "1": "sRGB",
-                                        "2": "Adobe RGB",
-                                        "65535": "Uncalibrated"
-                                    }
-                                    if current_value in colorspace_map:
-                                        print(f"Color space interpretation: {colorspace_map[current_value]}")
+                                    # Map camera color space to EXIF color space
+                                    if current_value == "sRGB":
+                                        self.exif_data['ColorSpace'] = 1
+                                    elif current_value == "Adobe RGB":
+                                        self.exif_data['ColorSpace'] = 2
+                                    self.update_exif_status(f"ColorSpace: {current_value}")
                 
                     print(f"Processed {config_count} configuration items")
                     self.status = "Camera details updated"
+                    self.update_exif_status("EXIF data extraction complete")
                 else:
                     error_msg = f"Error getting camera configuration: {config_stderr.decode('utf-8')}"
                     print(error_msg)
                     self.status = error_msg
+                    self.update_exif_status(error_msg)
             else:
                 error_msg = f"Error getting camera summary: {stderr.decode('utf-8')}"
                 print(error_msg)
                 self.status = error_msg
+                self.update_exif_status(error_msg)
         
         except Exception as e:
             error_msg = f"Error extracting camera details: {str(e)}"
             print(f"Exception in extract_camera_exif: {error_msg}")
             self.status = error_msg
+            self.update_exif_status(error_msg)
         
         print("EXIF extraction completed")
+
+    def update_exif_status(self, message):
+        """Update the EXIF status area with a message."""
+        try:
+            exif_status = self.query_one("#exif_status", Static)
+            current_text = exif_status.renderable
+            
+            # If this is the first message, clear the default text
+            if current_text == "EXIF data will be shown here when extracted":
+                current_text = ""
+            
+            # Add the new message with explicit line breaks
+            # Static widget will respect \n characters
+            if current_text:
+                current_text += f"\n{message}"
+            else:
+                current_text = message
+            
+            # Update the display
+            exif_status.update(current_text)
+        except Exception as e:
+            print(f"Could not update EXIF status: {e}")
     
     def update_input_field(self, field_id, value):
         """Safely update an input field if it exists."""
@@ -779,21 +821,23 @@ class CameraManager(Static):
             # Create EXIF data structure
             exif = Image.Exif()
             
-            # Basic camera info
-            exif[ExifTags.Base.Make] = self.exif_data['Make']
-            exif[ExifTags.Base.Model] = self.exif_data['Model']
-            exif[ExifTags.Base.Software] = self.software  # Use the software field
+            # Update software field from UI
+            self.update_fields_from_ui()
+            self.exif_data['Software'] = self.software
             
-            # User-provided metadata
-            exif[ExifTags.Base.ImageDescription] = self.subject
-            exif[ExifTags.Base.Artist] = self.owner
+            # Add all EXIF data from our dictionary
+            for tag_name, value in self.exif_data.items():
+                # Find the numeric tag ID for the string tag name
+                for tag_id, name in ExifTags.TAGS.items():
+                    if name == tag_name:
+                        exif[tag_id] = value
+                        break
             
-            # Create a UserComment field that includes the detail information
-            # UserComment requires special encoding according to EXIF spec
+            # Add user metadata as UserComment
             user_comment = f"Detail: {self.detail}"
             if self.project_name:
                 user_comment += f"\nProject: {self.project_name}"
-            if self.subject_id:  # Changed from specimen_id to subject_id
+            if self.subject_id:
                 user_comment += f"\nSubject ID: {self.subject_id}"
             if self.scale:
                 user_comment += f"\nScale: {self.scale}"
@@ -802,47 +846,19 @@ class CameraManager(Static):
             
             # EXIF UserComment must be encoded with specific header
             encoded_comment = b'ASCII\0\0\0' + user_comment.encode('ascii', 'replace')
-            exif[ExifTags.Base.UserComment] = encoded_comment
             
-            # Copyright information
-            if self.copyright:
-                exif[ExifTags.Base.Copyright] = self.copyright
+            # Find UserComment tag ID
+            for tag_id, name in ExifTags.TAGS.items():
+                if name == 'UserComment':
+                    exif[tag_id] = encoded_comment
+                    break
             
-            # Date and time
-            current_time = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
-            exif[ExifTags.Base.DateTime] = current_time
-            exif[ExifTags.Base.DateTimeOriginal] = current_time
-            exif[ExifTags.Base.DateTimeDigitized] = current_time
-            
-            # Image dimensions
-            exif[ExifTags.Base.PixelXDimension] = img.width
-            exif[ExifTags.Base.PixelYDimension] = img.height
-            
-            # Technical camera settings (if available)
-            if hasattr(self, 'exposure_time') and self.exposure_time:
-                if "/" in self.exposure_time:
-                    num, denom = self.exposure_time.split("/")
-                    exif[ExifTags.Base.ExposureTime] = (int(num), int(denom))
-            
-            if hasattr(self, 'f_number') and self.f_number:
-                try:
-                    f_num = float(self.f_number)
-                    exif[ExifTags.Base.FNumber] = (int(f_num * 10), 10)
-                except ValueError:
-                    pass
-                
-            if hasattr(self, 'focal_length') and self.focal_length:
-                try:
-                    focal = float(self.focal_length)
-                    exif[ExifTags.Base.FocalLength] = (int(focal * 10), 10)
-                except ValueError:
-                    pass
-            
-            # Standard defaults
-            exif[ExifTags.Base.ColorSpace] = 1  # sRGB
-            exif[ExifTags.Base.XResolution] = (72, 1)
-            exif[ExifTags.Base.YResolution] = (72, 1)
-            exif[ExifTags.Base.ResolutionUnit] = 2  # inches
+            # Add artist and copyright
+            for tag_id, name in ExifTags.TAGS.items():
+                if name == 'Artist':
+                    exif[tag_id] = self.owner
+                elif name == 'Copyright' and self.copyright:
+                    exif[tag_id] = self.copyright
             
             # Save the image with EXIF data
             img.save(filename, exif=exif)
@@ -850,3 +866,17 @@ class CameraManager(Static):
         except Exception as e:
             print(f"Error saving image with EXIF data: {e}")
             return False
+
+    def update_fields_from_ui(self):
+        """Update instance variables from UI inputs."""
+        try:
+            self.subject = self.query_one("#subject_input", Input).value
+            self.owner = self.query_one("#owner_input", Input).value
+            self.project_name = self.query_one("#project_input", Input).value
+            self.subject_id = self.query_one("#subject_id_input", Input).value
+            self.scale = self.query_one("#scale_input", Input).value
+            self.software = self.query_one("#software_input", Input).value
+            self.copyright = self.query_one("#copyright_input", Input).value
+            self.notes = self.query_one("#notes_input", Input).value
+        except Exception as e:
+            print(f"Error updating fields from UI: {e}")

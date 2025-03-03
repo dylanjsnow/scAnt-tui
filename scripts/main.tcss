@@ -435,3 +435,34 @@ Button#stop_all {
     overflow: auto;
 }
 
+/* EXIF status container */
+#exif_status_container {
+    width: 100%;
+    height: auto;
+    max-height: 200;
+    background: $surface;
+    border: solid $primary-darken-2;
+    margin: 1 0;
+    padding: 1;
+    overflow: auto;
+}
+
+#exif_status_title {
+    text-align: center;
+    width: 100%;
+    padding: 1;
+    background: $primary-darken-1;
+    color: $text;
+}
+
+#exif_status {
+    width: 100%;
+    height: auto;
+    min-height: 100;
+    max-height: 180;
+    background: $surface-darken-1;
+    color: $text;
+    padding: 1;
+    overflow: auto;
+}
+
