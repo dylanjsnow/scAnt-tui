@@ -320,10 +320,11 @@ Button#stop_all {
 }
 
 #camera_controls {
-    width: 100%;
+    layout: horizontal;
     height: auto;
-    align: center middle;
-    padding: 1;
+    width: 100%;
+    align: left middle;
+    margin: 1 0;
 }
 
 #camera_status_area {
@@ -334,8 +335,12 @@ Button#stop_all {
 }
 
 #camera_select {
-    width: 80%;
-    margin: 1 0;
+    width: 1fr;
+    margin-right: 1;
+}
+
+#camera_controls Button {
+    margin-left: 1;
 }
 
 #take_photo_btn {

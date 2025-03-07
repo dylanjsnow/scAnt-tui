@@ -148,13 +148,17 @@ class CameraManager(Static):
         with Container(id="camera_grid"):
             yield Label("Camera Control", id="camera_title", classes="section-title")
             
-            # Camera selection dropdown
-            self.cameras = self.get_connected_cameras()
-            yield Select(
-                options=[(cam, cam) for cam in self.cameras],
-                id="camera_select",
-                prompt="Select camera"
-            )
+            # Camera controls in horizontal layout
+            with Horizontal(id="camera_controls"):
+                # Camera selection dropdown
+                self.cameras = self.get_connected_cameras()
+                yield Select(
+                    options=[(cam, cam) for cam in self.cameras],
+                    id="camera_select",
+                    prompt="Select camera"
+                )
+                yield Button("Take Photo", id="take_photo_btn", variant="primary")
+                yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
             
             # File naming grid
             with Container(id="file_naming_grid"):
@@ -197,11 +201,6 @@ class CameraManager(Static):
                 
                 yield Label("Notes:", classes="field-label")
                 yield Input(id="notes_input", value=self.notes)
-            
-            # Camera control buttons
-            with Horizontal():
-                yield Button("Take Photo", id="take_photo_btn", variant="primary")
-                yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
 
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""

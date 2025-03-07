@@ -1,0 +1,57 @@
+CameraManager {
+    layout: vertical;
+    height: auto;
+    margin: 1;
+    padding: 1;
+}
+
+#camera_grid {
+    layout: vertical;
+    height: auto;
+    margin: 1;
+    padding: 1;
+}
+
+#camera_select {
+    width: 100%;
+    margin: 1 0;
+    height: 3;
+}
+
+#file_naming_grid {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: auto 1fr;
+    grid-rows: auto;
+    height: auto;
+    margin: 1;
+    padding: 1;
+}
+
+Label {
+    width: 100%;
+    height: 3;
+    content-align: right middle;
+    padding: 0 1;
+}
+
+Input {
+    width: 100%;
+    margin: 0 1;
+}
+
+Button {
+    margin: 1;
+}
+
+.section-title {
+    text-style: bold;
+    content-align: center middle;
+    width: 100%;
+    color: $accent;
+}
+
+.field-label {
+    padding-right: 1;
+    color: $text;
+} 
