@@ -116,47 +116,31 @@ class CameraManager(Static):
                     for key, value in saved_exif.items():
                         self.exif_data[key] = value
     
-    def save_settings(self):
+    def save_settings(self) -> None:
         """Save camera settings to the settings manager."""
         if self.settings_manager and hasattr(self.settings_manager, 'settings'):
             try:
-                # Update fields from UI before saving
-                self.update_fields_from_ui()
-                
-                # Prepare camera settings
+                # Get current values from UI without triggering updates
                 camera_settings = {
-                    "subject": self.subject,
-                    "owner": self.owner,
+                    "subject": self.query_one("#subject_input").value,
+                    "owner": self.query_one("#owner_input").value,
                     "detail": self.detail,
-                    "project_name": self.project_name,
-                    "subject_id": self.subject_id,
-                    "scale": self.scale,
-                    "copyright": self.copyright,
-                    "notes": self.notes,
-                    "software": self.software,
+                    "project_name": self.query_one("#project_input").value,
+                    "subject_id": self.query_one("#subject_id_input").value,
+                    "scale": self.query_one("#scale_input").value,
+                    "copyright": self.query_one("#copyright_input").value,
+                    "notes": self.query_one("#notes_input").value,
+                    "software": self.query_one("#software_input").value,
                     "selected_camera": self.selected_camera,
-                    "exif_string_format": self.exif_string_format,
+                    "exif_string_format": True,
+                    "exif_data": self.exif_data
                 }
                 
-                # Save EXIF data that can be serialized
-                serializable_exif = {}
-                for key, value in self.exif_data.items():
-                    # Skip binary data for now (would need special handling)
-                    if not isinstance(value, bytes):
-                        serializable_exif[key] = value
+                # Update settings directly
+                self.settings_manager.settings['camera'] = camera_settings
+                self.settings_manager.save_queue.put(self.settings_manager.settings)
+                print("Camera settings saved successfully")
                 
-                camera_settings["exif_data"] = serializable_exif
-                
-                # Update the settings
-                if 'camera' not in self.settings_manager.settings:
-                    self.settings_manager.settings['camera'] = {}
-                
-                # Update the camera section
-                self.settings_manager.settings['camera'].update(camera_settings)
-                
-                # Save the settings
-                if hasattr(self.settings_manager, 'save_settings'):
-                    self.settings_manager.save_settings()
             except Exception as e:
                 print(f"Error saving camera settings: {e}")
     
@@ -454,9 +438,9 @@ class CameraManager(Static):
         """Handle select change events."""
         if event.select.id == "camera_select":
             self.selected_camera = event.value
-            self.status = f"Selected camera: {self.selected_camera}"
-            # Save the selected camera
-            self.save_settings()
+            print(f"Selected camera: {self.selected_camera}")
+            
+            # Don't trigger a save here - let the user explicitly save with Update EXIF
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
@@ -544,185 +528,67 @@ class CameraManager(Static):
     
     @work
     async def extract_camera_exif(self) -> None:
-        """Extract EXIF data from the selected camera."""
+        """Extract EXIF data and save to settings."""
         if not self.selected_camera:
-            self.status = "No camera selected"
+            print("No camera selected")
             return
         
-        self.status = "Extracting camera details..."
-        
-        # Clear the EXIF status area
-        exif_status = self.query_one("#exif_status", Static)
-        exif_status.update("Starting EXIF extraction...")
-        
-        print(f"Starting EXIF extraction for camera: {self.selected_camera}")
-        
         try:
-            # Run gphoto2 command to get camera summary
-            print("Getting camera summary...")
-            self.status = "Getting camera summary..."
-            self.update_exif_status("Getting camera summary...")
+            print(f"\nUpdating EXIF data for camera: {self.selected_camera}")
             
-            # Create and run the process
-            process = await create_subprocess_exec(
-                "gphoto2", "--camera", self.selected_camera, "--summary",
-                stdout=PIPE, stderr=PIPE
-            )
+            # Get current values from UI
+            self.subject = self.query_one("#subject_input").value
+            self.owner = self.query_one("#owner_input").value
+            self.project_name = self.query_one("#project_input").value
+            self.subject_id = self.query_one("#subject_id_input").value
+            self.scale = self.query_one("#scale_input").value
+            self.software = self.query_one("#software_input").value
+            self.copyright = self.query_one("#copyright_input").value
+            self.notes = self.query_one("#notes_input").value
             
-            # Wait for the process to complete and get output
-            stdout, stderr = await process.communicate()
+            # Update EXIF data
+            self.exif_data.update({
+                'Make': 'Canon',  # Default manufacturer
+                'Model': self.selected_camera,
+                'Software': self.software,
+                'Copyright': self.copyright,
+                'ImageDescription': f"Project: {self.project_name}\nSubject: {self.subject}\nID: {self.subject_id}\nScale: {self.scale}\nNotes: {self.notes}",
+                'Artist': self.owner,
+                'DateTime': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
+                'DateTimeOriginal': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
+                'DateTimeDigitized': datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+            })
             
-            if process.returncode == 0:
-                summary = stdout.decode('utf-8')
-                print(f"Camera summary received: {len(summary)} bytes")
+            print("Updated EXIF fields:")
+            for key, value in self.exif_data.items():
+                print(f"  {key}: {value}")
+            
+            # Save to settings file
+            if self.settings_manager and hasattr(self.settings_manager, 'settings'):
+                # Prepare camera settings
+                camera_settings = {
+                    "subject": self.subject,
+                    "owner": self.owner,
+                    "detail": self.detail,
+                    "project_name": self.project_name,
+                    "subject_id": self.subject_id,
+                    "scale": self.scale,
+                    "copyright": self.copyright,
+                    "notes": self.notes,
+                    "software": self.software,
+                    "selected_camera": self.selected_camera,
+                    "exif_string_format": True,
+                    "exif_data": self.exif_data
+                }
                 
-                # Extract camera make and model
-                make_match = re.search(r"Manufacturer:\s*([^\n]+)", summary)
-                model_match = re.search(r"Model:\s*([^\n]+)", summary)
-                
-                if make_match:
-                    self.exif_data['Make'] = make_match.group(1).strip()
-                    print(f"Extracted camera make: {self.exif_data['Make']}")
-                    self.update_exif_status(f"Make: {self.exif_data['Make']}")
-                    
-                if model_match:
-                    self.exif_data['Model'] = model_match.group(1).strip()
-                    print(f"Extracted camera model: {self.exif_data['Model']}")
-                    self.update_exif_status(f"Model: {self.exif_data['Model']}")
-                
-                # Try to get camera configuration for more detailed EXIF data
-                print("Getting camera configuration list...")
-                self.status = "Getting camera configuration..."
-                self.update_exif_status("Getting camera configuration...")
-                
-                # Run the list-config command asynchronously
-                config_process = await create_subprocess_exec(
-                    "gphoto2", "--camera", self.selected_camera, "--list-config",
-                    stdout=PIPE, stderr=PIPE
-                )
-                
-                config_stdout, config_stderr = await config_process.communicate()
-                
-                if config_process.returncode == 0:
-                    config_list = config_stdout.decode('utf-8').strip().split('\n')
-                    print(f"Found {len(config_list)} configuration items")
-                    self.update_exif_status(f"Found {len(config_list)} configuration items")
-                    
-                    # Extract specific configuration values that map to EXIF data
-                    config_count = 0
-                    for config_item in config_list:
-                        if "/main/" not in config_item:
-                            continue
-                            
-                        config_count += 1
-                        print(f"Processing config item {config_count}/{len(config_list)}: {config_item}")
-                        self.status = f"Processing config: {config_item}"
-                        self.update_exif_status(f"Processing: {config_item}")
-                        
-                        # Get the value for this configuration item asynchronously
-                        get_config_process = await create_subprocess_exec(
-                            "gphoto2", "--camera", self.selected_camera, "--get-config", config_item,
-                            stdout=PIPE, stderr=PIPE
-                        )
-                        
-                        get_config_stdout, get_config_stderr = await get_config_process.communicate()
-                        
-                        if get_config_process.returncode == 0:
-                            config_value = get_config_stdout.decode('utf-8')
-                            
-                            # Print both the length and a preview of the actual content
-                            value_preview = config_value[:100] + "..." if len(config_value) > 100 else config_value
-                            value_preview = value_preview.replace('\n', '\\n')
-                            print(f"Got config value for {config_item}: {len(config_value)} bytes")
-                            print(f"Value content: {value_preview}")
-                            
-                            # Try to extract the current value
-                            current_value_match = re.search(r"Current:\s*([^\n]+)", config_value)
-                            if current_value_match:
-                                current_value = current_value_match.group(1).strip()
-                                print(f"Current value: {current_value}")
-                                
-                                # Map camera configuration to EXIF data
-                                if "shutterspeed" in config_item.lower() or "exposuretime" in config_item.lower():
-                                    try:
-                                        # Try to parse as a fraction (e.g., "1/100")
-                                        if "/" in current_value:
-                                            num, denom = current_value.split("/")
-                                            self.exif_data['ExposureTime'] = (int(num), int(denom))
-                                            self.update_exif_status(f"ExposureTime: {current_value}")
-                                    except (ValueError, IndexError):
-                                        print(f"Could not parse exposure time: {current_value}")
-                                
-                                elif "aperture" in config_item.lower() or "fnumber" in config_item.lower():
-                                    try:
-                                        aperture_value = current_value
-                                        if aperture_value.startswith("f/"):
-                                            aperture_value = aperture_value[2:]
-                                        self.exif_data['FNumber'] = (int(float(aperture_value) * 10), 10)
-                                        self.update_exif_status(f"FNumber: {current_value}")
-                                    except (ValueError, IndexError):
-                                        print(f"Could not parse aperture: {current_value}")
-                                
-                                elif "iso" in config_item.lower():
-                                    try:
-                                        iso_value = int(current_value)
-                                        self.exif_data['ISOSpeedRatings'] = iso_value
-                                        self.update_exif_status(f"ISO: {current_value}")
-                                    except (ValueError, IndexError):
-                                        print(f"Could not parse ISO: {current_value}")
-                                
-                                elif "focallength" in config_item.lower():
-                                    try:
-                                        focal_value = current_value
-                                        if "mm" in focal_value:
-                                            focal_value = focal_value.replace("mm", "").strip()
-                                        self.exif_data['FocalLength'] = (int(float(focal_value) * 10), 10)
-                                        self.update_exif_status(f"FocalLength: {current_value}")
-                                    except (ValueError, IndexError):
-                                        print(f"Could not parse focal length: {current_value}")
-                                
-                                elif "meteringmode" in config_item.lower():
-                                    # Map camera metering mode to EXIF metering mode
-                                    metering_map = {
-                                        "Evaluative": 5,  # Pattern
-                                        "Center-weighted": 2,  # Center-weighted average
-                                        "Spot": 3,  # Spot
-                                        "Partial": 6,  # Partial
-                                    }
-                                    if current_value in metering_map:
-                                        self.exif_data['MeteringMode'] = metering_map[current_value]
-                                        self.update_exif_status(f"MeteringMode: {current_value}")
-                                
-                                elif "colorspace" in config_item.lower():
-                                    # Map camera color space to EXIF color space
-                                    if current_value == "sRGB":
-                                        self.exif_data['ColorSpace'] = 1
-                                    elif current_value == "Adobe RGB":
-                                        self.exif_data['ColorSpace'] = 2
-                                    self.update_exif_status(f"ColorSpace: {current_value}")
-                
-                    print(f"Processed {config_count} configuration items")
-                    self.status = "Camera details updated"
-                    self.update_exif_status("EXIF data extraction complete")
-                else:
-                    error_msg = f"Error getting camera configuration: {config_stderr.decode('utf-8')}"
-                    print(error_msg)
-                    self.status = error_msg
-                    self.update_exif_status(error_msg)
-            else:
-                error_msg = f"Error getting camera summary: {stderr.decode('utf-8')}"
-                print(error_msg)
-                self.status = error_msg
-                self.update_exif_status(error_msg)
-        
+                # Update settings
+                self.settings_manager.settings['camera'] = camera_settings
+                self.settings_manager.save_queue.put(self.settings_manager.settings)
+                print("EXIF data saved to settings.json")
+            
         except Exception as e:
-            error_msg = f"Error extracting camera details: {str(e)}"
-            print(f"Exception in extract_camera_exif: {error_msg}")
-            self.status = error_msg
-            self.update_exif_status(error_msg)
-        
-        print("EXIF extraction completed")
-
+            print(f"Error updating EXIF data: {e}")
+    
     def update_exif_status(self, message):
         """Update the EXIF status area with a message."""
         try:
@@ -979,19 +845,18 @@ class CameraManager(Static):
             print(f"Error saving image with EXIF data: {e}")
             return False
 
-    def update_fields_from_ui(self):
+    def update_fields_from_ui(self) -> None:
         """Update instance variables from UI inputs."""
         try:
-            self.subject = self.query_one("#subject_input", Input).value
-            self.owner = self.query_one("#owner_input", Input).value
-            self.project_name = self.query_one("#project_input", Input).value
-            self.subject_id = self.query_one("#subject_id_input", Input).value
-            self.scale = self.query_one("#scale_input", Input).value
-            self.software = self.query_one("#software_input", Input).value
-            self.copyright = self.query_one("#copyright_input", Input).value
-            self.notes = self.query_one("#notes_input", Input).value
+            # Just update the instance variables without saving
+            self.subject = self.query_one("#subject_input").value
+            self.owner = self.query_one("#owner_input").value
+            self.project_name = self.query_one("#project_input").value
+            self.subject_id = self.query_one("#subject_id_input").value
+            self.scale = self.query_one("#scale_input").value
+            self.software = self.query_one("#software_input").value
+            self.copyright = self.query_one("#copyright_input").value
+            self.notes = self.query_one("#notes_input").value
             
-            # Save settings after updating fields
-            self.save_settings()
         except Exception as e:
             print(f"Error updating fields from UI: {e}")
