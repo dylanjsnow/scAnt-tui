@@ -22,7 +22,9 @@ class CameraManager(Static):
     
     def __init__(self, id: str = "camera_manager", settings_manager=None):
         """Initialize the camera manager."""
+        # Keep the super() call to properly initialize the parent widget
         super().__init__(id=id)
+        
         self.cameras = []
         self.selected_camera = None
         self.current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -117,43 +119,46 @@ class CameraManager(Static):
     def save_settings(self):
         """Save camera settings to the settings manager."""
         if self.settings_manager and hasattr(self.settings_manager, 'settings'):
-            # Update fields from UI before saving
-            self.update_fields_from_ui()
-            
-            # Prepare camera settings
-            camera_settings = {
-                "subject": self.subject,
-                "owner": self.owner,
-                "detail": self.detail,
-                "project_name": self.project_name,
-                "subject_id": self.subject_id,
-                "scale": self.scale,
-                "copyright": self.copyright,
-                "notes": self.notes,
-                "software": self.software,
-                "selected_camera": self.selected_camera,
-                "exif_string_format": self.exif_string_format,
-            }
-            
-            # Save EXIF data that can be serialized
-            serializable_exif = {}
-            for key, value in self.exif_data.items():
-                # Skip binary data for now (would need special handling)
-                if not isinstance(value, bytes):
-                    serializable_exif[key] = value
-            
-            camera_settings["exif_data"] = serializable_exif
-            
-            # Update the settings
-            if 'camera' not in self.settings_manager.settings:
-                self.settings_manager.settings['camera'] = {}
-            
-            # Update the camera section
-            self.settings_manager.settings['camera'].update(camera_settings)
-            
-            # Save the settings
-            if hasattr(self.settings_manager, 'save_settings'):
-                self.settings_manager.save_settings()
+            try:
+                # Update fields from UI before saving
+                self.update_fields_from_ui()
+                
+                # Prepare camera settings
+                camera_settings = {
+                    "subject": self.subject,
+                    "owner": self.owner,
+                    "detail": self.detail,
+                    "project_name": self.project_name,
+                    "subject_id": self.subject_id,
+                    "scale": self.scale,
+                    "copyright": self.copyright,
+                    "notes": self.notes,
+                    "software": self.software,
+                    "selected_camera": self.selected_camera,
+                    "exif_string_format": self.exif_string_format,
+                }
+                
+                # Save EXIF data that can be serialized
+                serializable_exif = {}
+                for key, value in self.exif_data.items():
+                    # Skip binary data for now (would need special handling)
+                    if not isinstance(value, bytes):
+                        serializable_exif[key] = value
+                
+                camera_settings["exif_data"] = serializable_exif
+                
+                # Update the settings
+                if 'camera' not in self.settings_manager.settings:
+                    self.settings_manager.settings['camera'] = {}
+                
+                # Update the camera section
+                self.settings_manager.settings['camera'].update(camera_settings)
+                
+                # Save the settings
+                if hasattr(self.settings_manager, 'save_settings'):
+                    self.settings_manager.save_settings()
+            except Exception as e:
+                print(f"Error saving camera settings: {e}")
     
     def compose(self) -> ComposeResult:
         """Compose the camera manager widget."""
@@ -289,7 +294,12 @@ class CameraManager(Static):
                 yield Label(self.status, id="camera_status", classes="status-label")
     
     def on_mount(self) -> None:
-        """Handle the mount event."""
+        """Event handler called when widget is added to the app"""
+        # Load settings first
+        self.load_settings()
+        # Schedule widget updates for after compose
+        self.set_timer(0.2, self.update_widget_values)
+        
         # Enable the take photo button even if no cameras are available
         take_photo_btn = self.query_one("#take_photo_btn", Button)
         take_photo_btn.disabled = False
@@ -305,6 +315,21 @@ class CameraManager(Static):
         
         # No need to hide the EXIF container as it's now always visible
         # with individual fields instead of a toggle-able container
+    
+    def update_widget_values(self) -> None:
+        """Update widget values after they're mounted"""
+        try:
+            # Update input values
+            self.query_one("#subject_input").value = self.subject
+            self.query_one("#owner_input").value = self.owner
+            self.query_one("#project_input").value = self.project_name
+            self.query_one("#subject_id_input").value = self.subject_id
+            self.query_one("#scale_input").value = self.scale
+            self.query_one("#software_input").value = self.software
+            self.query_one("#copyright_input").value = self.copyright
+            self.query_one("#notes_input").value = self.notes
+        except Exception as e:
+            print(f"Error updating fields from UI: {e}")
     
     def format_exif_data(self) -> str:
         """Format EXIF data for display in the TextArea."""
@@ -422,9 +447,8 @@ class CameraManager(Static):
         if event.input.id in ["subject_input", "owner_input", "project_input", 
                              "subject_id_input", "scale_input", "software_input",
                              "copyright_input", "notes_input"]:
-            # Don't save on every keystroke - could be inefficient
-            # Instead, schedule a delayed save
-            self.app.call_later(1, self.save_settings)
+            # Fix the lambda to accept the event argument
+            self.app.call_later(lambda _: self.save_settings(), 1)
     
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle select change events."""

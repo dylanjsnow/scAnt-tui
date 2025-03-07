@@ -44,6 +44,10 @@ class StepperMotor(Static):
         super().__init__(*args, **kwargs)
         self.settings = SettingsManager()
         
+        # Initialize with empty lists if no devices found
+        self.axes = get_axes() or ["Yaw", "Tilt", "Forward"]  # Default axes if none found
+        self.serial_numbers = get_stepper_motor_serial_numbers() or ["00000000"]  # Default if none found
+        
         # Create current limit options tuple
         self.current_limit_options = (
             ("0 mA (0)", "0"),
@@ -98,51 +102,57 @@ class StepperMotor(Static):
         """Event handler called when widget is added to the app"""
         self.add_class("deenergized")
         
-        # Load saved settings into inputs
+        # Load saved settings into instance variables first
         stepper_num = self.id.split("_")[-1]
         print(f"\nLoading saved settings for {self.id}:")
-        divisions = self.settings.get_setting(stepper_num, "divisions")
-        min_pos = self.settings.get_setting(stepper_num, "min_position")
-        max_pos = self.settings.get_setting(stepper_num, "max_position")
-        current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"  # Default to 2 if empty
-        saved_axis = self.settings.get_setting(stepper_num, "axis")
-        saved_serial = self.settings.get_setting(stepper_num, "serial")
-        max_speed = self.settings.get_setting(stepper_num, "max_speed") or "1000"  # Default to 1000 if empty
+        self.divisions = self.settings.get_setting(stepper_num, "divisions")
+        self.min_position = self.settings.get_setting(stepper_num, "min_position")
+        self.max_position = self.settings.get_setting(stepper_num, "max_position")
+        self.current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"
+        self.saved_axis = self.settings.get_setting(stepper_num, "axis")
+        self.saved_serial = self.settings.get_setting(stepper_num, "serial")
+        self.max_speed = self.settings.get_setting(stepper_num, "max_speed") or "1000"
         
-        print(f"Setting input values for {self.id}:")
-        print(f"  divisions: {divisions}")
-        print(f"  min_position: {min_pos}")
-        print(f"  max_position: {max_pos}")
-        print(f"  current_limit: {current_limit}")
-        print(f"  axis: {saved_axis}")
-        print(f"  serial: {saved_serial}")
-        
-        # Set default values if saved values are empty
-        if not saved_axis and len(self.axes) > 0:
-            saved_axis = self.axes[int(stepper_num) - 1]
-        if not saved_serial and len(self.serial_numbers) > 0:
-            saved_serial = self.serial_numbers[int(stepper_num) - 1]
-            
-        # Set the values to the widgets
-        self.query_one("#divisions_stepper").value = divisions
-        self.query_one("#min_position_stepper").value = min_pos
-        self.query_one("#max_position_stepper").value = max_pos
-        if current_limit in [opt[1] for opt in self.current_limit_options]:
-            self.query_one("#current_limit_stepper").value = current_limit
-        if saved_axis in self.axes:
-            self.query_one("#axis_stepper").value = saved_axis
-        if saved_serial in self.serial_numbers:
-            self.query_one("#serial_stepper").value = saved_serial
-        self.query_one("#max_speed_stepper").value = max_speed
-            
         # Set up intervals
         self.set_interval(1 / 10.0, self.watch_current_position)
         self.set_interval(1 / 10.0, self.watch_target_position)
         self.set_interval(0.1, self.update_scan_state)
         self.set_timer(0.1, self.update_button_state)
+        self.set_timer(0.2, self.update_widget_values)  # Schedule widget updates
         
         # Initialize control states
         self.update_control_states()
+
+    def update_widget_values(self) -> None:
+        """Update widget values after they're mounted"""
+        try:
+            # Update input values - convert all values to strings
+            if self.divisions is not None:
+                self.query_one("#divisions_stepper").value = str(self.divisions)
+            if self.min_position is not None:
+                self.query_one("#min_position_stepper").value = str(self.min_position)
+            if self.max_position is not None:
+                self.query_one("#max_position_stepper").value = str(self.max_position)
+            if self.max_speed is not None:
+                self.query_one("#max_speed_stepper").value = str(self.max_speed)
+            
+            # Update select values
+            if self.current_limit:
+                current_select = self.query_one("#current_limit_stepper")
+                if str(self.current_limit) in [opt[1] for opt in self.current_limit_options]:
+                    current_select.value = str(self.current_limit)
+            
+            if self.saved_axis:
+                axis_select = self.query_one("#axis_stepper")
+                if self.saved_axis in self.axes:
+                    axis_select.value = self.saved_axis
+            
+            if self.saved_serial:
+                serial_select = self.query_one("#serial_stepper")
+                if self.saved_serial in self.serial_numbers:
+                    serial_select.value = self.saved_serial
+        except Exception as e:
+            print(f"Error updating widget values: {e}")
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -457,20 +467,18 @@ class StepperMotor(Static):
         
         # Configuration controls - only enabled when OFF
         yield Select(
-            options=((axis, axis) for axis in self.axes), 
+            options=[(axis, axis) for axis in self.axes],  # Use list comprehension instead of generator
             id="axis_stepper",
-            value=self.axes[int(self.id.split("_")[-1]) - 1],
-            allow_blank=False,
-            prompt="Select axis",
-            tooltip="Choose the movement axis for this stepper motor"
+            value=self.axes[0],  # Default to first axis
+            allow_blank=True,  # Allow blank selection
+            prompt="Select axis"
         )
         yield Select(
-            options=((serial, serial) for serial in self.serial_numbers),
-            id="serial_stepper", 
-            value=self.serial_numbers[int(self.id.split("_")[-1]) - 1] if len(self.serial_numbers) > 0 else "",
-            allow_blank=False,
-            prompt="Select device",
-            tooltip="Choose the serial number of the Tic stepper motor controller"
+            options=[(serial, serial) for serial in self.serial_numbers],  # Use list comprehension
+            id="serial_stepper",
+            value=self.serial_numbers[0],  # Default to first serial
+            allow_blank=True,  # Allow blank selection
+            prompt="Select device"
         )
         yield Select(
             options=self.current_limit_options,
