@@ -1,6 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Horizontal, Vertical, Container
-from textual.widgets import Header, Footer, Button
+from textual.widgets import Header, Footer, Button, TabbedContent, TabPane
 from stepper_motor import StepperMotor
 from camera import CameraManager
 from utils import ScanState
@@ -17,9 +17,9 @@ class ScannerApp(App):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Initialize settings manager without arguments
-        # The SettingsManager likely has a hardcoded path or uses a default
-        self.settings_manager = SettingsManager()
+        # Initialize settings manager with explicit file path
+        self.settings_manager = SettingsManager("settings.json")
+        print("ScannerApp initialized with settings manager")
     
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -34,13 +34,10 @@ class ScannerApp(App):
             
             # Stepper motors in a vertical container to show in a column
             with Vertical(id="stepper_container"):
-                # Create stepper motors with just id and name parameters
-                for i in range(1, 4):  # Assuming we have 3 steppers
-                    stepper_key = f"stepper_{i}"
-                    if stepper_key in self.settings_manager.settings:
-                        # Get the axis name from settings to use as the motor name
-                        axis = self.settings_manager.settings[stepper_key].get("axis", f"Motor {i}")
-                        yield StepperMotor(id=stepper_key, name=axis)
+                # Create stepper motors with shared settings manager
+                yield StepperMotor(stepper_id="1", settings_manager=self.settings_manager)
+                yield StepperMotor(stepper_id="2", settings_manager=self.settings_manager)
+                yield StepperMotor(stepper_id="3", settings_manager=self.settings_manager)
             
             # Camera manager below the control buttons
             yield CameraManager(settings_manager=self.settings_manager)

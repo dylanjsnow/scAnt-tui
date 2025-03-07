@@ -39,14 +39,31 @@ class StepperMotor(Static):
     _wait_timer = None  # Store reference to active timer
     current_limit = reactive(2)  # Default to 174mA (code 2)
     max_speed = reactive(0)  # Add this with other reactive properties
+    usb_id = reactive(None)  # Added for USB ID selection
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, stepper_id: str, settings_manager=None, *args, **kwargs):
+        """Initialize stepper motor interface.
+        
+        Args:
+            stepper_id: The stepper number (1, 2, or 3)
+            settings_manager: Optional shared settings manager instance
+        """
+        # Ensure ID is set before calling parent init
+        if 'id' not in kwargs:
+            kwargs['id'] = f"stepper_{stepper_id}"
+            
         super().__init__(*args, **kwargs)
-        self.settings = SettingsManager()
+        
+        # Store the stepper number
+        self.stepper_num = str(stepper_id)
+        
+        # Use provided settings manager or create new one
+        self.settings = settings_manager or SettingsManager()
+        print(f"StepperMotor {self.id} initialized with settings manager")
         
         # Initialize with empty lists if no devices found
-        self.axes = get_axes() or ["Yaw", "Tilt", "Forward"]  # Default axes if none found
-        self.serial_numbers = get_stepper_motor_serial_numbers() or ["00000000"]  # Default if none found
+        self.axes = get_axes() or ["Yaw", "Tilt", "Forward"]
+        self.serial_numbers = get_stepper_motor_serial_numbers() or ["00000000"]
         
         # Create current limit options tuple
         self.current_limit_options = (
@@ -84,6 +101,8 @@ class StepperMotor(Static):
             ("2962 mA (31)", "31"),
             ("3093 mA (32)", "32"),
         )
+        
+        print(f"Initialized StepperMotor {self.id} with stepper_num {self.stepper_num}")
 
     def reset(self):
         self.axis = ""
@@ -98,30 +117,77 @@ class StepperMotor(Static):
         self.query_one(MinPositionDisplay).min_position = self.min_position
         self.moving = False
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
+        print(f"\nStarting on_mount for {self.id}")  # Debug print
+        
         self.add_class("deenergized")
         
-        # Load saved settings into instance variables first
-        stepper_num = self.id.split("_")[-1]
-        print(f"\nLoading saved settings for {self.id}:")
-        self.divisions = self.settings.get_setting(stepper_num, "divisions")
-        self.min_position = self.settings.get_setting(stepper_num, "min_position")
-        self.max_position = self.settings.get_setting(stepper_num, "max_position")
-        self.current_limit = self.settings.get_setting(stepper_num, "current_limit") or "2"
-        self.saved_axis = self.settings.get_setting(stepper_num, "axis")
-        self.saved_serial = self.settings.get_setting(stepper_num, "serial")
-        self.max_speed = self.settings.get_setting(stepper_num, "max_speed") or "1000"
+        # Use stored stepper number instead of parsing ID
+        print(f"Loading saved settings for stepper_{self.stepper_num}:")
         
-        # Set up intervals
-        self.set_interval(1 / 10.0, self.watch_current_position)
-        self.set_interval(1 / 10.0, self.watch_target_position)
-        self.set_interval(0.1, self.update_scan_state)
-        self.set_timer(0.1, self.update_button_state)
-        self.set_timer(0.2, self.update_widget_values)  # Schedule widget updates
-        
-        # Initialize control states
-        self.update_control_states()
+        try:
+            # Load all settings with proper defaults
+            self.divisions = self.settings.get_setting(self.stepper_num, "divisions") or "0"
+            self.min_position = self.settings.get_setting(self.stepper_num, "min_position") or "0"
+            self.max_position = self.settings.get_setting(self.stepper_num, "max_position") or "0"
+            self.current_limit = self.settings.get_setting(self.stepper_num, "current_limit") or "2"
+            self.max_speed = self.settings.get_setting(self.stepper_num, "max_speed") or "1000"
+            
+            # Load axis and serial settings
+            saved_axis = self.settings.get_setting(self.stepper_num, "axis")
+            if saved_axis in self.axes:
+                self.axis = saved_axis
+                self.saved_axis = saved_axis
+            else:
+                # Set default axis based on stepper number
+                default_axis = self.axes[int(self.stepper_num) - 1] if int(self.stepper_num) <= len(self.axes) else self.axes[0]
+                self.axis = default_axis
+                self.saved_axis = default_axis
+            
+            # Load serial number
+            saved_serial = self.settings.get_setting(self.stepper_num, "serial")
+            if saved_serial in self.serial_numbers:
+                self.serial_number = saved_serial
+                self.saved_serial = saved_serial
+            elif self.serial_numbers:  # If we have any serial numbers available
+                self.serial_number = self.serial_numbers[0]
+                self.saved_serial = self.serial_numbers[0]
+            
+            # Load USB ID
+            saved_usb = self.settings.get_setting(self.stepper_num, "usb_id")
+            if saved_usb and saved_usb in self.serial_numbers:
+                self.usb_id = saved_usb
+            elif self.serial_numbers:  # If no saved USB ID but we have available devices
+                self.usb_id = self.serial_numbers[0]
+            
+            # Print loaded settings for debugging
+            print(f"Loaded settings for {self.id}:")
+            print(f"  Axis: {self.axis}")
+            print(f"  Serial: {self.serial_number}")
+            print(f"  USB ID: {self.usb_id}")
+            print(f"  Current Limit: {self.current_limit}")
+            print(f"  Max Speed: {self.max_speed}")
+            print(f"  Divisions: {self.divisions}")
+            print(f"  Min Position: {self.min_position}")
+            print(f"  Max Position: {self.max_position}")
+            
+            # Set up intervals
+            self.set_interval(1 / 10.0, self.watch_current_position)
+            self.set_interval(1 / 10.0, self.watch_target_position)
+            self.set_interval(0.1, self.update_scan_state)
+            
+            # Schedule UI updates
+            self.set_timer(0.1, self.update_button_state)
+            self.set_timer(0.2, self.update_widget_values)
+            
+            # Initialize control states
+            self.update_control_states()
+            
+            print(f"Successfully loaded settings for {self.id}")
+            
+        except Exception as e:
+            print(f"Error loading settings for {self.id}: {e}")
 
     def update_widget_values(self) -> None:
         """Update widget values after they're mounted"""
@@ -151,6 +217,16 @@ class StepperMotor(Static):
                 serial_select = self.query_one("#serial_stepper")
                 if self.saved_serial in self.serial_numbers:
                     serial_select.value = self.saved_serial
+            
+            # Update USB select if we have a saved value
+            if self.usb_id:
+                usb_select = self.query_one("#usb_select")
+                available_ports = self.get_available_ports()
+                if usb_select and self.usb_id in available_ports:
+                    usb_select.value = self.usb_id
+                elif available_ports:  # If saved port not available but others are
+                    usb_select.value = available_ports[0]  # Select first available port
+                
         except Exception as e:
             print(f"Error updating widget values: {e}")
 
@@ -430,35 +506,50 @@ class StepperMotor(Static):
 
     @on(Select.Changed)
     def on_select_changed(self, event: Select.Changed) -> None:
-        """Handle a select change"""
-        print(self.id, " select changed to: ", event.value)
-        stepper_num = self.id.split("_")[-1]
-        
-        if event.select.id == "axis_stepper":
-            self.axis = event.value
-            print(self.id, " axis: ", self.axis)
-            self.settings.queue_save(stepper_num, "axis", event.value)
+        """Handle select change events."""
+        if event.select.id == "usb_select":
+            # Get the actual USB ID value from the selection
+            selected_usb = event.value  # This is the raw value from the select
+            print(f"{self.id} USB ID selected: {selected_usb}")
             
-            # Update the title to match the selected axis
-            title_label = self.query_one(f"#{self.id}_title", Label)
-            title_label.update(f"{event.value} Control")
+            # Save the USB ID to settings
+            if self.settings:
+                self.settings.queue_save(self.id.split("_")[-1], "usb_id", selected_usb)
             
-        elif event.select.id == "serial_stepper":
-            self.serial_number = event.value
-            print(self.id, " serial number: ", self.serial_number)
-            self.settings.queue_save(stepper_num, "serial", event.value)
+            # Update the instance variable
+            self.usb_id = selected_usb
             
-        elif event.select.id == "current_limit_stepper":
-            self.current_limit = event.value
-            # Get the mA value from the options tuple for display
-            current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
-            print(f"{self.id} current limit set to: {current_ma}")
-            self.settings.queue_save(stepper_num, "current_limit", event.value)
+            # Update the UI to reflect the change
+            self.update_status()
+        else:
+            print(self.id, " select changed to: ", event.value)
+            stepper_num = self.id.split("_")[-1]
             
-            # Update the motor if it's connected and energized
-            if self.tic and self.energized:
-                self.tic.set_current_limit(int(event.value))
-                self.tic.exit_safe_start()
+            if event.select.id == "axis_stepper":
+                self.axis = event.value
+                print(self.id, " axis: ", self.axis)
+                self.settings.queue_save(stepper_num, "axis", event.value)
+                
+                # Update the title to match the selected axis
+                title_label = self.query_one(f"#{self.id}_title", Label)
+                title_label.update(f"{event.value} Control")
+                
+            elif event.select.id == "serial_stepper":
+                self.serial_number = event.value
+                print(self.id, " serial number: ", self.serial_number)
+                self.settings.queue_save(stepper_num, "serial", event.value)
+                
+            elif event.select.id == "current_limit_stepper":
+                self.current_limit = event.value
+                # Get the mA value from the options tuple for display
+                current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
+                print(f"{self.id} current limit set to: {current_ma}")
+                self.settings.queue_save(stepper_num, "current_limit", event.value)
+                
+                # Update the motor if it's connected and energized
+                if self.tic and self.energized:
+                    self.tic.set_current_limit(int(event.value))
+                    self.tic.exit_safe_start()
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the stepper motor"""
@@ -542,6 +633,27 @@ class StepperMotor(Static):
         
         # Initialize with visible progress
         self.set_timer(0.2, lambda: progress_bar.update(progress=10))
+
+        # USB Selection
+        yield Label("USB Port:", classes="field-label")
+        
+        # Get available ports
+        available_ports = self.get_available_ports()
+        
+        # Create select with proper initial value
+        initial_value = None
+        if self.usb_id and self.usb_id in available_ports:
+            initial_value = self.usb_id
+        elif available_ports:  # If we have any ports, select the first one
+            initial_value = available_ports[0]
+        
+        yield Select(
+            id="usb_select",
+            options=[(port, port) for port in available_ports],
+            value=initial_value,  # Will be either saved value, first port, or None if no ports
+            prompt="Select USB port",
+            allow_blank=True  # Allow no selection
+        )
 
     def get_division_positions(self) -> list[int]:
         """Calculate all positions to stop at during scan, returning integer positions"""
@@ -726,3 +838,13 @@ class StepperMotor(Static):
         if self._wait_timer:
             self._wait_timer.stop()
             self._wait_timer = None
+
+    def get_available_ports(self) -> list[str]:
+        """Get list of available USB ports for Tic devices"""
+        # Return the serial numbers of connected Tic devices
+        return self.serial_numbers if self.serial_numbers else []
+
+    def update_status(self) -> None:
+        # This method should be implemented to update the status of the stepper motor
+        # based on the selected USB port.
+        pass

@@ -1,0 +1,50 @@
+{
+    "stepper_1": {
+        "usb_id": null,
+        "current": 0,
+        "speed": 0,
+        "divisions": "",
+        "min_position": "",
+        "max_position": "",
+        "current_limit": "9",
+        "axis": "Forward",
+        "serial": "00425332",
+        "max_speed": "10000.0"
+    },
+    "stepper_2": {
+        "usb_id": null,
+        "current": 0,
+        "speed": 0,
+        "divisions": "",
+        "min_position": "",
+        "max_position": "",
+        "current_limit": "2",
+        "axis": "Forward",
+        "serial": "00425332",
+        "max_speed": "1000.0"
+    },
+    "stepper_3": {
+        "usb_id": null,
+        "current": 0,
+        "speed": 0,
+        "divisions": "",
+        "min_position": "",
+        "max_position": "",
+        "current_limit": "2",
+        "axis": "Yaw",
+        "serial": "00425332",
+        "max_speed": "1000.0"
+    },
+    "camera": {
+        "selected_camera": null,
+        "subject": "Scan",
+        "owner": "User",
+        "detail": "yaw0_tilt0_forward0",
+        "project_name": "",
+        "subject_id": "",
+        "scale": "",
+        "copyright": "",
+        "notes": "",
+        "software": "MacroScans v1.0"
+    }
+}

@@ -1,5 +1,8 @@
 {
     "stepper_1": {
+        "usb_id": "00425332",
+        "current": "0",
+        "speed": "0",
         "divisions": "10",
         "min_position": "0",
         "max_position": "170000",
@@ -9,6 +12,9 @@
         "max_speed": "1000.0"
     },
     "stepper_2": {
+        "usb_id": "00425332",
+        "current": "0",
+        "speed": "0",
         "divisions": "18",
         "min_position": "0",
         "max_position": "1800",
@@ -18,6 +24,9 @@
         "max_speed": "1000.0"
     },
     "stepper_3": {
+        "usb_id": "00425332",
+        "current": "0",
+        "speed": "0",
         "divisions": "5",
         "min_position": "-12000",
         "max_position": "12000",
@@ -37,41 +46,7 @@
         "notes": "e",
         "software": "MacroScans v1.0",
         "selected_camera": "Canon EOS R",
-        "exif_string_format": true,
-        "exif_data": {
-            "Make": "Canon",
-            "Model": "Canon EOS R",
-            "Software": "MacroScans v1.0",
-            "Orientation": "1",
-            "DateTime": "2025:03:07 12:54:03",
-            "YCbCrPositioning": "1",
-            "XResolution": "72/1",
-            "YResolution": "72/1",
-            "ResolutionUnit": "2",
-            "ExposureTime": "1/100",
-            "FNumber": "40/10",
-            "ExposureProgram": "1",
-            "ExifVersion": "30323331",
-            "DateTimeOriginal": "2025:03:07 12:54:03",
-            "DateTimeDigitized": "2025:03:07 12:54:03",
-            "ComponentsConfiguration": "01020300",
-            "CompressedBitsPerPixel": "4/1",
-            "ExposureBiasValue": "0/1",
-            "MaxApertureValue": "20/10",
-            "MeteringMode": "5",
-            "Flash": "16",
-            "FocalLength": "200/10",
-            "MakerNote": "",
-            "FlashpixVersion": "30313030",
-            "ColorSpace": "1",
-            "PixelXDimension": "1280",
-            "PixelYDimension": "720",
-            "FileSource": "03",
-            "InteroperabilityIndex": "R98",
-            "InteroperabilityVersion": "30313030",
-            "Copyright": "d",
-            "ImageDescription": "Date: 2025:03:07 12:40:14\nSubject: Scan\nArtist: User\nDetail: yaw0_tilt0_forward0\nProject: a\nSubject ID: b\nScale: c\nSoftware: MacroScans v1.0\nCopyright: d\nNotes: e",
-            "Artist": "User"
-        }
+        "exif_string_format": "True",
+        "exif_data": "{'Make': 'Canon', 'Model': 'Canon EOS R', 'Software': 'MacroScans v1.0', 'Orientation': '1', 'DateTime': '2025:03:07 14:43:00', 'YCbCrPositioning': '1', 'XResolution': '72/1', 'YResolution': '72/1', 'ResolutionUnit': '2', 'ExposureTime': '1/100', 'FNumber': '40/10', 'ExposureProgram': '1', 'ExifVersion': '30323331', 'DateTimeOriginal': '2025:03:07 14:43:00', 'DateTimeDigitized': '2025:03:07 14:43:00', 'ComponentsConfiguration': '01020300', 'CompressedBitsPerPixel': '4/1', 'ExposureBiasValue': '0/1', 'MaxApertureValue': '20/10', 'MeteringMode': '5', 'Flash': '16', 'FocalLength': '200/10', 'MakerNote': '', 'FlashpixVersion': '30313030', 'ColorSpace': '1', 'PixelXDimension': '1280', 'PixelYDimension': '720', 'FileSource': '03', 'InteroperabilityIndex': 'R98', 'InteroperabilityVersion': '30313030', 'Copyright': 'MacroScans LLC', 'ImageDescription': 'Date: 2025:03:07 12:56:05\\nSubject: Scan\\nArtist: dylan.snow\\nDetail: yaw0_tilt0_forward0\\nProject: test\\nSubject ID: 1\\nScale: 1:1\\nSoftware: MacroScans v1.0\\nCopyright: MacroScans LLC\\nNotes: no notes', 'Artist': 'dylan.snow'}"
     }
 }
