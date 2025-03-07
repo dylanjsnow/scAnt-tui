@@ -207,24 +207,37 @@ class CameraManager(Static):
         """Event handler called when widget is added to the app"""
         # Load settings first
         self.load_settings()
-        # Schedule widget updates for after compose
-        self.set_timer(0.2, self.update_widget_values)
         
-        # Enable the take photo button even if no cameras are available
-        take_photo_btn = self.query_one("#take_photo_btn", Button)
-        take_photo_btn.disabled = False
+        try:
+            # Select the previously used camera if available
+            if self.selected_camera:
+                camera_select = self.query_one("#camera_select")
+                if camera_select:
+                    # Check if the saved camera is in the current options
+                    if self.selected_camera in [cam for cam in self.cameras]:
+                        camera_select.value = self.selected_camera
+                        print(f"Restored previous camera selection: {self.selected_camera}")
+                    else:
+                        print(f"Previously selected camera {self.selected_camera} not found in available cameras")
+            
+            # Enable the take photo button even if no cameras are available
+            take_photo_btn = self.query_one("#take_photo_btn", Button)
+            take_photo_btn.disabled = False
+            
+            # Update the date field with current timestamp
+            self.update_date_field()
+            
+            # Update the detail field with current stepper positions
+            self.update_detail_field()
+            
+            # Set up a timer to update the date every second
+            self._date_timer = self.set_interval(1.0, self.update_date_field)
+            
+            # No need to hide the EXIF container as it's now always visible
+            # with individual fields instead of a toggle-able container
         
-        # Update the date field with current timestamp
-        self.update_date_field()
-        
-        # Update the detail field with current stepper positions
-        self.update_detail_field()
-        
-        # Set up a timer to update the date every second
-        self._date_timer = self.set_interval(1.0, self.update_date_field)
-        
-        # No need to hide the EXIF container as it's now always visible
-        # with individual fields instead of a toggle-able container
+        except Exception as e:
+            print(f"Error in on_mount: {e}")
     
     def update_widget_values(self) -> None:
         """Update widget values after they're mounted"""
