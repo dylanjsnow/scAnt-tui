@@ -86,14 +86,13 @@ class CameraManager(Static):
         # Load settings if available
         self.load_settings()
     
-    def load_settings(self):
-        """Load camera settings from the settings manager."""
+    def load_settings(self) -> None:
+        """Load camera settings from settings manager."""
         if self.settings_manager and hasattr(self.settings_manager, 'settings'):
-            # Check if camera section exists in settings
             if 'camera' in self.settings_manager.settings:
                 camera_settings = self.settings_manager.settings['camera']
                 
-                # Load user metadata with defaults
+                # Load user metadata
                 self.subject = camera_settings.get("subject", self.subject)
                 self.owner = camera_settings.get("owner", self.owner)
                 self.detail = camera_settings.get("detail", self.detail)
@@ -103,19 +102,17 @@ class CameraManager(Static):
                 self.copyright = camera_settings.get("copyright", self.copyright)
                 self.notes = camera_settings.get("notes", self.notes)
                 self.software = camera_settings.get("software", self.software)
-                
-                # Load last selected camera
                 self.selected_camera = camera_settings.get("selected_camera", self.selected_camera)
                 
-                # Load EXIF display preferences
-                self.exif_string_format = camera_settings.get("exif_string_format", self.exif_string_format)
-                
-                # Load EXIF data if available
-                if "exif_data" in camera_settings:
-                    saved_exif = camera_settings["exif_data"]
-                    # Update our EXIF data with saved values
-                    for key, value in saved_exif.items():
-                        self.exif_data[key] = value
+                # Try to load EXIF data from exif.json if it exists
+                try:
+                    exif_file = Path(__file__).parent / "exif.json"
+                    if exif_file.exists():
+                        with open(exif_file, 'r') as f:
+                            self.exif_data = json.load(f)
+                        print("Loaded EXIF data from exif.json")
+                except Exception as e:
+                    print(f"Error loading EXIF data: {e}")
     
     def save_settings(self) -> None:
         """Save camera settings to the settings manager."""
@@ -172,7 +169,7 @@ class CameraManager(Static):
                 yield Label("Subject:", classes="field-label")
                 yield Input(id="subject_input", value=self.subject)
                 
-                yield Label("Owner:", classes="field-label")
+                yield Label("Artist:", classes="field-label")
                 yield Input(id="owner_input", value=self.owner)
                 
                 # Detail (auto-generated from stepper positions)
@@ -312,16 +309,22 @@ class CameraManager(Static):
             self.status = f"Error updating EXIF data: {str(e)}"
     
     def update_date_field(self) -> None:
-        """Update the date field with current timestamp."""
-        self.current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
-        date_input = self.query_one("#date_input", Input)
-        date_input.value = self.current_date
-        
-        # Also update EXIF date fields
-        now = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
-        self.exif_data['DateTime'] = now
-        self.exif_data['DateTimeOriginal'] = now
-        self.exif_data['DateTimeDigitized'] = now
+        """Update the date field with current timestamp in EXIF format (YYYY:MM:DD HH:MM:SS)."""
+        try:
+            # Format date according to EXIF standard
+            self.current_date = datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+            date_input = self.query_one("#date_input")
+            if date_input:
+                date_input.value = self.current_date
+                
+                # Also update EXIF date fields with same format
+                self.exif_data.update({
+                    'DateTime': self.current_date,
+                    'DateTimeOriginal': self.current_date,
+                    'DateTimeDigitized': self.current_date
+                })
+        except Exception as e:
+            print(f"Error updating date field: {e}")
     
     def update_detail_field(self) -> None:
         """Update the detail field with current stepper positions."""
@@ -499,7 +502,7 @@ class CameraManager(Static):
             
             # Get current values from UI
             self.subject = self.query_one("#subject_input").value
-            self.owner = self.query_one("#owner_input").value
+            self.owner = self.query_one("#owner_input").value  # This is now the Artist
             self.project_name = self.query_one("#project_input").value
             self.subject_id = self.query_one("#subject_id_input").value
             self.scale = self.query_one("#scale_input").value
@@ -507,17 +510,31 @@ class CameraManager(Static):
             self.copyright = self.query_one("#copyright_input").value
             self.notes = self.query_one("#notes_input").value
             
+            # Create comprehensive image description
+            image_description = (
+                f"Date: {self.current_date}\n"
+                f"Subject: {self.subject}\n"
+                f"Artist: {self.owner}\n"
+                f"Detail: {self.detail}\n"
+                f"Project: {self.project_name}\n"
+                f"Subject ID: {self.subject_id}\n"
+                f"Scale: {self.scale}\n"
+                f"Software: {self.software}\n"
+                f"Copyright: {self.copyright}\n"
+                f"Notes: {self.notes}"
+            )
+            
             # Update EXIF data
             self.exif_data.update({
                 'Make': 'Canon',  # Default manufacturer
                 'Model': self.selected_camera,
                 'Software': self.software,
                 'Copyright': self.copyright,
-                'ImageDescription': f"Project: {self.project_name}\nSubject: {self.subject}\nID: {self.subject_id}\nScale: {self.scale}\nNotes: {self.notes}",
-                'Artist': self.owner,
-                'DateTime': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-                'DateTimeOriginal': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-                'DateTimeDigitized': datetime.now().strftime("%Y:%m:%d %H:%M:%S")
+                'ImageDescription': image_description,
+                'Artist': self.owner,  # Set Artist from Owner field
+                'DateTime': self.current_date,
+                'DateTimeOriginal': self.current_date,
+                'DateTimeDigitized': self.current_date
             })
             
             print("Updated EXIF fields:")
@@ -527,8 +544,8 @@ class CameraManager(Static):
             # Save EXIF data to separate file
             serializable_exif = self.save_exif_data()
             
-            if serializable_exif and self.settings_manager:
-                # Save camera settings without raw EXIF data
+            if self.settings_manager:
+                # Save only camera settings (no EXIF data)
                 camera_settings = {
                     "subject": self.subject,
                     "owner": self.owner,
@@ -539,9 +556,7 @@ class CameraManager(Static):
                     "copyright": self.copyright,
                     "notes": self.notes,
                     "software": self.software,
-                    "selected_camera": self.selected_camera,
-                    # Store reference to EXIF file instead of raw data
-                    "exif_file": "exif.json"
+                    "selected_camera": self.selected_camera
                 }
                 
                 # Update settings

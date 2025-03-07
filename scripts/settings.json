@@ -30,13 +30,12 @@
         "subject": "Scan",
         "owner": "User",
         "detail": "yaw0_tilt0_forward0",
-        "project_name": "",
-        "subject_id": "",
-        "scale": "",
-        "copyright": "",
-        "notes": "",
+        "project_name": "a",
+        "subject_id": "b",
+        "scale": "c",
+        "copyright": "d",
+        "notes": "e",
         "software": "MacroScans v1.0",
-        "selected_camera": "Canon EOS R",
-        "exif_file": "exif.json"
+        "selected_camera": "Canon EOS R"
     }
 }
