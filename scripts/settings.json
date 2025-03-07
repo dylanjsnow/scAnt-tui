@@ -25,5 +25,18 @@
         "axis": "Forward",
         "serial": "00425332",
         "max_speed": "1000.0"
+    },
+    "camera": {
+        "subject": "Scan",
+        "owner": "User",
+        "detail": "yaw0_tilt0_forward0",
+        "project_name": "",
+        "subject_id": "",
+        "scale": "",
+        "copyright": "",
+        "notes": "",
+        "software": "MacroScans v1.0",
+        "selected_camera": "Canon EOS R",
+        "exif_file": "exif.json"
     }
 }

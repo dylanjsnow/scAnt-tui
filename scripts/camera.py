@@ -5,7 +5,7 @@ import asyncio
 from asyncio.subprocess import create_subprocess_exec, PIPE
 from datetime import datetime
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, Grid, ScrollableContainer
+from textual.containers import Horizontal, Vertical, Grid, ScrollableContainer, Container
 from textual.widgets import Button, Label, Select, Static, Input, TextArea
 from textual.reactive import reactive
 from textual import work
@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont, ExifTags
 import json
 import re
 from settings import SettingsManager
+from pathlib import Path
 
 class CameraManager(Static):
     """A widget to manage camera operations."""
@@ -145,138 +146,66 @@ class CameraManager(Static):
                 print(f"Error saving camera settings: {e}")
     
     def compose(self) -> ComposeResult:
-        """Compose the camera manager widget."""
-        # Main container
-        with Grid(id="camera_grid"):
-            # Title
+        """Create child widgets for the camera manager."""
+        # Camera selection and control
+        with Container(id="camera_grid"):
             yield Label("Camera Control", id="camera_title", classes="section-title")
             
             # Camera selection dropdown
             self.cameras = self.get_connected_cameras()
-            camera_options = [(camera, camera) for camera in self.cameras]
+            yield Select(
+                options=[(cam, cam) for cam in self.cameras],
+                id="camera_select",
+                prompt="Select camera"
+            )
             
-            # Camera selection area
-            with Horizontal(id="camera_selection_area", classes="control-row"):
-                if camera_options:
-                    yield Select(
-                        options=camera_options,
-                        prompt="Select Camera",
-                        id="camera_select",
-                        classes="camera-select"
-                    )
-                else:
-                    yield Label("No cameras detected", id="no_camera_label", classes="info-label")
-            
-            # File naming and metadata options
-            with Grid(id="file_naming_grid", classes="file-naming-section"):
+            # File naming grid
+            with Container(id="file_naming_grid"):
                 # Date (auto-generated, read-only)
                 yield Label("Date:", classes="field-label")
                 yield Input(
                     value=self.current_date,
                     id="date_input",
-                    disabled=True,
-                    classes="field-input readonly"
+                    disabled=True
                 )
                 
-                # Subject (user input)
                 yield Label("Subject:", classes="field-label")
-                yield Input(
-                    value=self.subject,
-                    id="subject_input",
-                    placeholder="Enter subject",
-                    classes="field-input"
-                )
+                yield Input(id="subject_input", value=self.subject)
                 
-                # Owner (user input)
                 yield Label("Owner:", classes="field-label")
-                yield Input(
-                    value=self.owner,
-                    id="owner_input",
-                    placeholder="Enter owner",
-                    classes="field-input"
-                )
+                yield Input(id="owner_input", value=self.owner)
                 
-                # Detail (auto-generated from stepper positions, read-only)
+                # Detail (auto-generated from stepper positions)
                 yield Label("Detail:", classes="field-label")
                 yield Input(
                     value=self.detail,
                     id="detail_input",
-                    disabled=True,
-                    classes="field-input readonly"
+                    disabled=True
                 )
                 
-                # Project Name (user input)
                 yield Label("Project:", classes="field-label")
-                yield Input(
-                    value=self.project_name,
-                    id="project_input",
-                    placeholder="Enter project name",
-                    classes="field-input"
-                )
+                yield Input(id="project_input", value=self.project_name)
                 
-                # Subject ID (user input)
                 yield Label("Subject ID:", classes="field-label")
-                yield Input(
-                    value=self.subject_id,
-                    id="subject_id_input",
-                    placeholder="Enter subject ID",
-                    classes="field-input"
-                )
+                yield Input(id="subject_id_input", value=self.subject_id)
                 
-                # Scale/Magnification (user input)
                 yield Label("Scale:", classes="field-label")
-                yield Input(
-                    value=self.scale,
-                    id="scale_input",
-                    placeholder="Enter scale/magnification",
-                    classes="field-input"
-                )
+                yield Input(id="scale_input", value=self.scale)
                 
-                # Software name (user input)
                 yield Label("Software:", classes="field-label")
-                yield Input(
-                    value=self.software,
-                    id="software_input",
-                    placeholder="Enter software name",
-                    classes="field-input"
-                )
+                yield Input(id="software_input", value=self.software)
                 
-                # Copyright (user input)
                 yield Label("Copyright:", classes="field-label")
-                yield Input(
-                    value=self.copyright,
-                    id="copyright_input",
-                    placeholder="Enter copyright info",
-                    classes="field-input"
-                )
+                yield Input(id="copyright_input", value=self.copyright)
                 
-                # Notes (user input)
                 yield Label("Notes:", classes="field-label")
-                yield Input(
-                    value=self.notes,
-                    id="notes_input",
-                    placeholder="Enter additional notes",
-                    classes="field-input"
-                )
-            
-            # EXIF data controls
-            with Horizontal(id="exif_controls", classes="control-row"):
-                yield Button("Update Details from Camera", id="update_exif_btn", variant="primary", classes="action-button")
-                yield Button("Toggle EXIF Format", id="toggle_exif_format_btn", variant="default", classes="action-button")
-            
-            # EXIF extraction status - using a TextArea instead of a Label for better scrolling
-            with Vertical(id="exif_status_container", classes="status-container"):
-                yield Label("EXIF Data", id="exif_status_title", classes="section-title")
-                yield Static("EXIF data will be shown here when extracted", id="exif_status", classes="exif-status")
+                yield Input(id="notes_input", value=self.notes)
             
             # Camera control buttons
-            with Horizontal(id="camera_controls", classes="control-row"):
-                yield Button("Take Photo", id="take_photo_btn", variant="primary", classes="action-button")
-            
-            # Status display
-            with Horizontal(id="camera_status_area", classes="status-row"):
-                yield Label(self.status, id="camera_status", classes="status-label")
-    
+            with Horizontal():
+                yield Button("Take Photo", id="take_photo_btn", variant="primary")
+                yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
+
     def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
         # Load settings first
@@ -444,14 +373,10 @@ class CameraManager(Static):
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
-        button_id = event.button.id
-        
-        if button_id == "take_photo_btn":
+        if event.button.id == "take_photo_btn":
             self.take_photo()
-        elif button_id == "update_exif_btn":
+        elif event.button.id == "update_exif_btn":
             self.extract_camera_exif()
-        elif button_id == "toggle_exif_format_btn":
-            self.toggle_exif_format()
     
     def toggle_exif_format(self):
         """Toggle between string and binary representation of EXIF data."""
@@ -526,6 +451,42 @@ class CameraManager(Static):
             self.status = f"Error: {str(e)}"
             return []
     
+    @staticmethod
+    def convert_exif_for_json(exif_data: dict) -> dict:
+        """Convert EXIF data to JSON-serializable format."""
+        serializable_exif = {}
+        for key, value in exif_data.items():
+            if isinstance(value, bytes):
+                # Convert bytes to hex string
+                serializable_exif[key] = value.hex()
+            elif isinstance(value, tuple):
+                # Convert rational numbers to string representation
+                if len(value) == 2:
+                    serializable_exif[key] = f"{value[0]}/{value[1]}"
+                else:
+                    serializable_exif[key] = str(value)
+            else:
+                # Convert other types to strings
+                serializable_exif[key] = str(value)
+        return serializable_exif
+
+    def save_exif_data(self) -> None:
+        """Save EXIF data to separate exif.json file."""
+        try:
+            # Convert EXIF data to serializable format
+            serializable_exif = self.convert_exif_for_json(self.exif_data)
+            
+            # Save to exif.json
+            exif_file = Path(__file__).parent / "exif.json"
+            with open(exif_file, 'w') as f:
+                json.dump(serializable_exif, f, indent=2)
+            print(f"EXIF data saved to {exif_file}")
+            
+            return serializable_exif
+        except Exception as e:
+            print(f"Error saving EXIF data: {e}")
+            return None
+
     @work
     async def extract_camera_exif(self) -> None:
         """Extract EXIF data and save to settings."""
@@ -563,9 +524,11 @@ class CameraManager(Static):
             for key, value in self.exif_data.items():
                 print(f"  {key}: {value}")
             
-            # Save to settings file
-            if self.settings_manager and hasattr(self.settings_manager, 'settings'):
-                # Prepare camera settings
+            # Save EXIF data to separate file
+            serializable_exif = self.save_exif_data()
+            
+            if serializable_exif and self.settings_manager:
+                # Save camera settings without raw EXIF data
                 camera_settings = {
                     "subject": self.subject,
                     "owner": self.owner,
@@ -577,14 +540,14 @@ class CameraManager(Static):
                     "notes": self.notes,
                     "software": self.software,
                     "selected_camera": self.selected_camera,
-                    "exif_string_format": True,
-                    "exif_data": self.exif_data
+                    # Store reference to EXIF file instead of raw data
+                    "exif_file": "exif.json"
                 }
                 
                 # Update settings
                 self.settings_manager.settings['camera'] = camera_settings
                 self.settings_manager.save_queue.put(self.settings_manager.settings)
-                print("EXIF data saved to settings.json")
+                print("Camera settings saved to settings.json")
             
         except Exception as e:
             print(f"Error updating EXIF data: {e}")
