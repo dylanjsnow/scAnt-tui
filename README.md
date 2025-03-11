@@ -4,6 +4,10 @@ ScAnt Terminal User Interface
 
 A simplified version of the scAnt GUI, for use on an Ubuntu-based system. Runs directly in the terminal. Tested on Ubuntu 20.04 LTS.
 
+## Screenshot
+
+![Screenshot](./docs/scAnt-tui-screenshot.png)
+
 ### Installation, Ubuntu
 
 1. Install the dependencies:
