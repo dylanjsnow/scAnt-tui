@@ -402,7 +402,7 @@ class CameraManager(Static):
                 self.notes = event.value
             
             # Save settings after a short delay
-            self.app.call_later(lambda _: self.save_settings(), 1)
+            # self.app.call_later(lambda _: self.save_settings(), 1)
             
         except Exception as e:
             logger.error(f"Error handling input change: {e}")
