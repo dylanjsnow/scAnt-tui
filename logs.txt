@@ -765,3 +765,256 @@
 2025-03-11 13:47:44 - settings - INFO - Saving all settings to /home/snowman/work/scAnt-tui/scripts/settings.json - [settings.py:110]
 2025-03-11 13:47:44 - settings - DEBUG - Settings saved successfully - [settings.py:125]
 2025-03-11 13:47:44 - __main__ - INFO - Settings saved on shutdown - [main.py:108]
+2025-03-11 15:29:46 - __main__ - INFO - Starting ScannerApp - [main.py:114]
+2025-03-11 15:29:46 - __main__ - INFO - Initializing ScannerApp - [main.py:33]
+2025-03-11 15:29:46 - settings - INFO - Initializing SettingsManager with file: /home/snowman/work/scAnt-tui/scripts/settings.json - [settings.py:19]
+2025-03-11 15:29:46 - settings - INFO - Attempting to load settings from /home/snowman/work/scAnt-tui/scripts/settings.json - [settings.py:151]
+2025-03-11 15:29:46 - settings - DEBUG - Reading settings from /home/snowman/work/scAnt-tui/scripts/settings.json - [settings.py:183]
+2025-03-11 15:29:46 - settings - INFO - Settings file loaded successfully - [settings.py:156]
+2025-03-11 15:29:46 - settings - DEBUG - Settings merged with defaults - [settings.py:167]
+2025-03-11 15:29:46 - settings - DEBUG - Current settings after loading: - [settings.py:170]
+2025-03-11 15:29:46 - settings - DEBUG - {
+  "stepper_1": {
+    "usb_id": "00425332",
+    "current": "0",
+    "speed": "0",
+    "divisions": "10",
+    "min_position": "0",
+    "max_position": "170000",
+    "current_limit": "9",
+    "axis": "Forward",
+    "serial": "00425332",
+    "max_speed": "15000.0"
+  },
+  "stepper_2": {
+    "usb_id": "00425332",
+    "current": "0",
+    "speed": "0",
+    "divisions": "18",
+    "min_position": "0",
+    "max_position": "1800",
+    "current_limit": "9",
+    "axis": "Yaw",
+    "serial": "00425361",
+    "max_speed": "1000.0"
+  },
+  "stepper_3": {
+    "usb_id": "00425332",
+    "current": "0",
+    "speed": "0",
+    "divisions": "5",
+    "min_position": "-12000",
+    "max_position": "12000",
+    "current_limit": "21",
+    "axis": "Tilt",
+    "serial": "00425337",
+    "max_speed": "50000.0"
+  },
+  "camera": {
+    "selected_camera": "Canon EOS R",
+    "subject": "Scan",
+    "owner": "User",
+    "detail": "yaw0_tilt0_forward0",
+    "project_name": "a",
+    "subject_id": "b",
+    "scale": "c",
+    "copyright": "d",
+    "notes": "e",
+    "software": "MacroScans v1.0",
+    "exif_string_format": "True",
+    "exif_data": "{'Make': 'Canon', 'Model': 'Canon EOS R', 'Software': 'MacroScans v1.0', 'Orientation': '1', 'DateTime': '2025:03:11 13:47:43', 'YCbCrPositioning': '1', 'XResolution': '72/1', 'YResolution': '72/1', 'ResolutionUnit': '2', 'ExposureTime': '1/100', 'FNumber': '40/10', 'ExposureProgram': '1', 'ExifVersion': '30323331', 'DateTimeOriginal': '2025:03:11 13:47:43', 'DateTimeDigitized': '2025:03:11 13:47:43', 'ComponentsConfiguration': '01020300', 'CompressedBitsPerPixel': '4/1', 'ExposureBiasValue': '0/1', 'MaxApertureValue': '20/10', 'MeteringMode': '5', 'Flash': '16', 'FocalLength': '200/10', 'MakerNote': '', 'FlashpixVersion': '30313030', 'ColorSpace': '1', 'PixelXDimension': '1280', 'PixelYDimension': '720', 'FileSource': '03', 'InteroperabilityIndex': 'R98', 'InteroperabilityVersion': '30313030', 'Copyright': 'd', 'ImageDescription': 'Date: 2025:03:10 13:27:00\\nSubject: Scan\\nArtist: User\\nDetail: yaw0_tilt0_forward0\\nProject: a\\nSubject ID: b\\nScale: c\\nSoftware: MacroScans v1.0\\nCopyright: d\\nNotes: e', 'Artist': 'User'}"
+  }
+} - [settings.py:171]
+2025-03-11 15:29:46 - settings - INFO - SettingsManager initialization complete - [settings.py:26]
+2025-03-11 15:29:46 - __main__ - INFO - Settings manager initialized successfully - [main.py:36]
+2025-03-11 15:29:46 - asyncio - DEBUG - Using selector: EpollSelector - [selector_events.py:64]
+2025-03-11 15:29:46 - __main__ - DEBUG - Starting app composition - [main.py:43]
+2025-03-11 15:29:46 - __main__ - INFO - Creating stepper motor instances - [main.py:56]
+2025-03-11 15:29:46 - __main__ - DEBUG - Creating stepper motor 1 - [main.py:59]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - StepperMotor stepper_1 initialized with settings manager - [stepper_motor.py:65]
+2025-03-11 15:29:46 - utils - INFO - Getting list of connected TIC stepper motors - [utils.py:9]
+2025-03-11 15:29:46 - utils - DEBUG - Running 'ticcmd --list' to get connected Tic devices - [utils.py:10]
+2025-03-11 15:29:46 - utils - INFO - Found 3 connected Tic devices: ['00425332', '00425361', '00425337'] - [utils.py:15]
+2025-03-11 15:29:46 - stepper_motor - INFO - Initialized StepperMotor stepper_1 with stepper_num 1 - [stepper_motor.py:108]
+2025-03-11 15:29:46 - __main__ - DEBUG - Creating stepper motor 2 - [main.py:59]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - StepperMotor stepper_2 initialized with settings manager - [stepper_motor.py:65]
+2025-03-11 15:29:46 - utils - INFO - Getting list of connected TIC stepper motors - [utils.py:9]
+2025-03-11 15:29:46 - utils - DEBUG - Running 'ticcmd --list' to get connected Tic devices - [utils.py:10]
+2025-03-11 15:29:46 - utils - INFO - Found 3 connected Tic devices: ['00425332', '00425361', '00425337'] - [utils.py:15]
+2025-03-11 15:29:46 - stepper_motor - INFO - Initialized StepperMotor stepper_2 with stepper_num 2 - [stepper_motor.py:108]
+2025-03-11 15:29:46 - __main__ - DEBUG - Creating stepper motor 3 - [main.py:59]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - StepperMotor stepper_3 initialized with settings manager - [stepper_motor.py:65]
+2025-03-11 15:29:46 - utils - INFO - Getting list of connected TIC stepper motors - [utils.py:9]
+2025-03-11 15:29:46 - utils - DEBUG - Running 'ticcmd --list' to get connected Tic devices - [utils.py:10]
+2025-03-11 15:29:46 - utils - INFO - Found 3 connected Tic devices: ['00425332', '00425361', '00425337'] - [utils.py:15]
+2025-03-11 15:29:46 - stepper_motor - INFO - Initialized StepperMotor stepper_3 with stepper_num 3 - [stepper_motor.py:108]
+2025-03-11 15:29:46 - __main__ - INFO - Creating camera manager - [main.py:63]
+2025-03-11 15:29:46 - camera - DEBUG - Loaded EXIF data from exif.json - [camera.py:124]
+2025-03-11 15:29:46 - camera - DEBUG - Loading camera settings - [camera.py:127]
+2025-03-11 15:29:46 - camera - INFO - Initializing CameraManager - [camera.py:93]
+2025-03-11 15:29:46 - __main__ - DEBUG - App composition completed successfully - [main.py:67]
+2025-03-11 15:29:46 - progress_display - DEBUG - ProgressDisplay initialized - [progress_display.py:28]
+2025-03-11 15:29:46 - progress_display - DEBUG - ProgressDisplay initialized - [progress_display.py:28]
+2025-03-11 15:29:46 - progress_display - DEBUG - ProgressDisplay initialized - [progress_display.py:28]
+2025-03-11 15:29:46 - current_position - DEBUG - Current position changed to: 0 - [current_position.py:19]
+2025-03-11 15:29:46 - current_position - DEBUG - Mounting CurrentPositionDisplay with initial value: 0 - [current_position.py:14]
+2025-03-11 15:29:46 - target_position - DEBUG - Target position changed to: 0 - [target_position.py:19]
+2025-03-11 15:29:46 - target_position - DEBUG - Mounting TargetPositionDisplay with initial value: 0 - [target_position.py:14]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: 0 - [min_position.py:19]
+2025-03-11 15:29:46 - min_position - DEBUG - Mounting MinPositionDisplay with initial value: 0 - [min_position.py:14]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 0 - [max_position.py:19]
+2025-03-11 15:29:46 - max_position - DEBUG - Mounting MaxPositionDisplay with initial value: 0 - [max_position.py:14]
+2025-03-11 15:29:46 - current_position - DEBUG - Current position changed to: 0 - [current_position.py:19]
+2025-03-11 15:29:46 - current_position - DEBUG - Mounting CurrentPositionDisplay with initial value: 0 - [current_position.py:14]
+2025-03-11 15:29:46 - target_position - DEBUG - Target position changed to: 0 - [target_position.py:19]
+2025-03-11 15:29:46 - target_position - DEBUG - Mounting TargetPositionDisplay with initial value: 0 - [target_position.py:14]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: 0 - [min_position.py:19]
+2025-03-11 15:29:46 - min_position - DEBUG - Mounting MinPositionDisplay with initial value: 0 - [min_position.py:14]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 0 - [max_position.py:19]
+2025-03-11 15:29:46 - max_position - DEBUG - Mounting MaxPositionDisplay with initial value: 0 - [max_position.py:14]
+2025-03-11 15:29:46 - current_position - DEBUG - Current position changed to: 0 - [current_position.py:19]
+2025-03-11 15:29:46 - current_position - DEBUG - Mounting CurrentPositionDisplay with initial value: 0 - [current_position.py:14]
+2025-03-11 15:29:46 - target_position - DEBUG - Target position changed to: 0 - [target_position.py:19]
+2025-03-11 15:29:46 - target_position - DEBUG - Mounting TargetPositionDisplay with initial value: 0 - [target_position.py:14]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: 0 - [min_position.py:19]
+2025-03-11 15:29:46 - min_position - DEBUG - Mounting MinPositionDisplay with initial value: 0 - [min_position.py:14]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 0 - [max_position.py:19]
+2025-03-11 15:29:46 - max_position - DEBUG - Mounting MaxPositionDisplay with initial value: 0 - [max_position.py:14]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Starting on_mount for stepper_1 - [stepper_motor.py:125]
+2025-03-11 15:29:46 - stepper_motor - INFO - Loading saved settings for stepper_1: - [stepper_motor.py:130]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Loaded settings for stepper_1: - [stepper_motor.py:168]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Axis: Forward - [stepper_motor.py:169]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Serial: 00425332 - [stepper_motor.py:170]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   USB ID: 00425332 - [stepper_motor.py:171]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Current Limit: 9 - [stepper_motor.py:172]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Speed: 15000.0 - [stepper_motor.py:173]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Divisions: 10 - [stepper_motor.py:174]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Min Position: 0 - [stepper_motor.py:175]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Position: 170000 - [stepper_motor.py:176]
+2025-03-11 15:29:46 - stepper_motor - INFO - Successfully loaded settings for stepper_1 - [stepper_motor.py:190]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 max_speed: 1000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 1000.0 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 select changed to: Forward - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 axis: Forward - [stepper_motor.py:552]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 axis: Forward - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 select changed to: 00425332 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 serial number: 00425332 - [stepper_motor.py:561]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 serial: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 select changed to: 2 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 current limit set to: 174 mA (2) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 current_limit: 2 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 2 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 USB ID selected: 00425332 - [stepper_motor.py:535]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 usb_id: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated usb_id to: 00425332 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Starting on_mount for stepper_2 - [stepper_motor.py:125]
+2025-03-11 15:29:46 - stepper_motor - INFO - Loading saved settings for stepper_2: - [stepper_motor.py:130]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Loaded settings for stepper_2: - [stepper_motor.py:168]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Axis: Yaw - [stepper_motor.py:169]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Serial: 00425361 - [stepper_motor.py:170]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   USB ID: 00425332 - [stepper_motor.py:171]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Current Limit: 9 - [stepper_motor.py:172]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Speed: 1000.0 - [stepper_motor.py:173]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Divisions: 18 - [stepper_motor.py:174]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Min Position: 0 - [stepper_motor.py:175]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Position: 1800 - [stepper_motor.py:176]
+2025-03-11 15:29:46 - stepper_motor - INFO - Successfully loaded settings for stepper_2 - [stepper_motor.py:190]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 max_speed: 1000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 1000.0 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: Forward - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 axis: Forward - [stepper_motor.py:552]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 axis: Forward - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: 00425332 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 serial number: 00425332 - [stepper_motor.py:561]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 serial: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: 2 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 current limit set to: 174 mA (2) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 current_limit: 2 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 2 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 USB ID selected: 00425332 - [stepper_motor.py:535]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 usb_id: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated usb_id to: 00425332 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Starting on_mount for stepper_3 - [stepper_motor.py:125]
+2025-03-11 15:29:46 - stepper_motor - INFO - Loading saved settings for stepper_3: - [stepper_motor.py:130]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - Loaded settings for stepper_3: - [stepper_motor.py:168]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Axis: Tilt - [stepper_motor.py:169]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Serial: 00425337 - [stepper_motor.py:170]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   USB ID: 00425332 - [stepper_motor.py:171]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Current Limit: 21 - [stepper_motor.py:172]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Speed: 50000.0 - [stepper_motor.py:173]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Divisions: 5 - [stepper_motor.py:174]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Min Position: -12000 - [stepper_motor.py:175]
+2025-03-11 15:29:46 - stepper_motor - DEBUG -   Max Position: 12000 - [stepper_motor.py:176]
+2025-03-11 15:29:46 - stepper_motor - INFO - Successfully loaded settings for stepper_3 - [stepper_motor.py:190]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 max_speed: 1000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 1000.0 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: Forward - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 axis: Forward - [stepper_motor.py:552]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 axis: Forward - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: 00425332 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 serial number: 00425332 - [stepper_motor.py:561]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 serial: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: 2 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 current limit set to: 174 mA (2) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 current_limit: 2 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 2 - [settings.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 USB ID selected: 00425332 - [stepper_motor.py:535]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 usb_id: 00425332 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated usb_id to: 00425332 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 max_speed: 15000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 15000.0 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 divisions: 10 - [settings.py:84]
+2025-03-11 15:29:46 - progress_display - DEBUG - Updated total divisions to 10 - [progress_display.py:102]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 min_position: 0 - [settings.py:84]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: 0 - [min_position.py:19]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 max_position: 170000 - [settings.py:84]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 170000 - [max_position.py:19]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 select changed to: 9 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_1 current limit set to: 1092 mA (9) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_1 current_limit: 9 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 9 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 max_speed: 1000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 1000.0 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 divisions: 18 - [settings.py:84]
+2025-03-11 15:29:46 - progress_display - DEBUG - Updated total divisions to 18 - [progress_display.py:102]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 min_position: 0 - [settings.py:84]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: 0 - [min_position.py:19]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 max_position: 1800 - [settings.py:84]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 1800 - [max_position.py:19]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: 9 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 current limit set to: 1092 mA (9) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 current_limit: 9 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 9 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 max_speed: 50000.0 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated max_speed to: 50000.0 - [settings.py:100]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 divisions: 5 - [settings.py:84]
+2025-03-11 15:29:46 - progress_display - DEBUG - Updated total divisions to 5 - [progress_display.py:102]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 min_position: -12000 - [settings.py:84]
+2025-03-11 15:29:46 - min_position - DEBUG - Minimum position changed to: -12000 - [min_position.py:19]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 max_position: 12000 - [settings.py:84]
+2025-03-11 15:29:46 - max_position - DEBUG - Maximum position changed to: 12000 - [max_position.py:19]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: 21 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 current limit set to: 2056 mA (21) - [stepper_motor.py:568]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 current_limit: 21 - [settings.py:84]
+2025-03-11 15:29:46 - settings - DEBUG - Updated current_limit to: 21 - [settings.py:100]
+2025-03-11 15:29:46 - camera - DEBUG - Loaded EXIF data from exif.json - [camera.py:124]
+2025-03-11 15:29:46 - camera - DEBUG - Loading camera settings - [camera.py:127]
+2025-03-11 15:29:46 - camera - DEBUG - Previously selected camera Canon EOS R not found in available cameras - [camera.py:231]
+2025-03-11 15:29:46 - __main__ - INFO - App mounted - [main.py:100]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: Yaw - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 axis: Yaw - [stepper_motor.py:552]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 axis: Yaw - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 select changed to: 00425361 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_2 serial number: 00425361 - [stepper_motor.py:561]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_2 serial: 00425361 - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: Tilt - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 axis: Tilt - [stepper_motor.py:552]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 axis: Tilt - [settings.py:84]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 select changed to: 00425337 - [stepper_motor.py:547]
+2025-03-11 15:29:46 - stepper_motor - DEBUG - stepper_3 serial number: 00425337 - [stepper_motor.py:561]
+2025-03-11 15:29:46 - settings - DEBUG - Updating setting for stepper_3 serial: 00425337 - [settings.py:84]
+2025-03-11 15:29:51 - camera - DEBUG - Camera settings saved successfully - [camera.py:151]
+2025-03-11 15:29:51 - __main__ - INFO - App unmounting - [main.py:104]
+2025-03-11 15:29:51 - settings - INFO - Saving all settings to /home/snowman/work/scAnt-tui/scripts/settings.json - [settings.py:110]
+2025-03-11 15:29:51 - settings - DEBUG - Settings saved successfully - [settings.py:125]
+2025-03-11 15:29:51 - __main__ - INFO - Settings saved on shutdown - [main.py:108]
