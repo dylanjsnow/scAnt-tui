@@ -14,7 +14,10 @@ from target_position import TargetPositionDisplay
 from max_position import MaxPositionDisplay
 from min_position import MinPositionDisplay
 from current_limit import CurrentLimitDisplay
+import logging
 
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 class StepperMotor(Static):
     """A stepper motor interface"""
@@ -58,8 +61,8 @@ class StepperMotor(Static):
         self.stepper_num = str(stepper_id)
         
         # Use provided settings manager or create new one
-        self.settings = settings_manager or SettingsManager()
-        print(f"StepperMotor {self.id} initialized with settings manager")
+        self.settings = settings_manager
+        logger.debug(f"StepperMotor {self.id} initialized with settings manager")
         
         # Initialize with empty lists if no devices found
         self.axes = get_axes() or ["Yaw", "Tilt", "Forward"]
@@ -102,7 +105,7 @@ class StepperMotor(Static):
             ("3093 mA (32)", "32"),
         )
         
-        print(f"Initialized StepperMotor {self.id} with stepper_num {self.stepper_num}")
+        logger.info(f"Initialized StepperMotor {self.id} with stepper_num {self.stepper_num}")
 
     def reset(self):
         self.axis = ""
@@ -119,12 +122,12 @@ class StepperMotor(Static):
 
     async def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
-        print(f"\nStarting on_mount for {self.id}")  # Debug print
+        logger.debug(f"Starting on_mount for {self.id}")
         
         self.add_class("deenergized")
         
         # Use stored stepper number instead of parsing ID
-        print(f"Loading saved settings for stepper_{self.stepper_num}:")
+        logger.info(f"Loading saved settings for stepper_{self.stepper_num}:")
         
         try:
             # Load all settings with proper defaults
@@ -162,15 +165,15 @@ class StepperMotor(Static):
                 self.usb_id = self.serial_numbers[0]
             
             # Print loaded settings for debugging
-            print(f"Loaded settings for {self.id}:")
-            print(f"  Axis: {self.axis}")
-            print(f"  Serial: {self.serial_number}")
-            print(f"  USB ID: {self.usb_id}")
-            print(f"  Current Limit: {self.current_limit}")
-            print(f"  Max Speed: {self.max_speed}")
-            print(f"  Divisions: {self.divisions}")
-            print(f"  Min Position: {self.min_position}")
-            print(f"  Max Position: {self.max_position}")
+            logger.debug(f"Loaded settings for {self.id}:")
+            logger.debug(f"  Axis: {self.axis}")
+            logger.debug(f"  Serial: {self.serial_number}")
+            logger.debug(f"  USB ID: {self.usb_id}")
+            logger.debug(f"  Current Limit: {self.current_limit}")
+            logger.debug(f"  Max Speed: {self.max_speed}")
+            logger.debug(f"  Divisions: {self.divisions}")
+            logger.debug(f"  Min Position: {self.min_position}")
+            logger.debug(f"  Max Position: {self.max_position}")
             
             # Set up intervals
             self.set_interval(1 / 10.0, self.watch_current_position)
@@ -184,10 +187,10 @@ class StepperMotor(Static):
             # Initialize control states
             self.update_control_states()
             
-            print(f"Successfully loaded settings for {self.id}")
+            logger.info(f"Successfully loaded settings for {self.id}")
             
         except Exception as e:
-            print(f"Error loading settings for {self.id}: {e}")
+            logger.error(f"Error loading settings for {self.id}: {e}")
 
     def update_widget_values(self) -> None:
         """Update widget values after they're mounted"""
@@ -228,7 +231,7 @@ class StepperMotor(Static):
                     usb_select.value = available_ports[0]  # Select first available port
                 
         except Exception as e:
-            print(f"Error updating widget values: {e}")
+            logger.error(f"Error updating widget values: {e}")
 
     def watch_current_position(self) -> None:
         if self.tic and self.energized:
@@ -237,8 +240,8 @@ class StepperMotor(Static):
             self.moving = self.tic.get_current_position() != self.tic.get_target_position()
             
         if self.moving:
-            print(self.id, " current position: ", self.current_position)
-            print(self.id, " target position: ", self.target_position)
+            logger.debug(f"{self.id} current position: {self.current_position}")
+            logger.debug(f"{self.id} target position: {self.target_position}")
 
     def watch_target_position(self) -> None:
         """Watch for target position changes and update motor"""
@@ -312,7 +315,7 @@ class StepperMotor(Static):
         # Re-enable motor movement
         self.tic.exit_safe_start()
         
-        print(f"{self.id} zeroed - Current position: {self.current_position}, Target position: {self.target_position}")
+        logger.info(f"{self.id} zeroed - Current position: {self.current_position}, Target position: {self.target_position}")
 
     def update_initialized(self, event: Button.Pressed) -> None:
         """Handle power button press"""
@@ -345,7 +348,7 @@ class StepperMotor(Static):
             
             # Set the current limit when energizing
             if self.current_limit:
-                print(f"{self.id} current limit set to: {self.current_limit}")
+                logger.debug(f"{self.id} current limit set to: {self.current_limit}")
                 self.tic.set_current_limit(int(self.current_limit))
                 
             self.tic.energize()
@@ -354,66 +357,85 @@ class StepperMotor(Static):
         self.update_control_states()
 
     def update_control_states(self) -> None:
-        """Update all control states based on current motor state"""
-        scanning_in_progress = self.scan_state != ScanState.IDLE
-        
-        # Configuration controls (disabled during scan)
-        config_controls = ["axis_stepper", "serial_stepper", "current_limit_stepper", "max_speed_stepper"]
-        for control_id in config_controls:
-            control = self.query_one(f"#{control_id}")
-            control.disabled = not self.initialized or scanning_in_progress
-            if not control.disabled:
-                control.add_class("enabled")
+        """Update control states based on current motor state"""
+        try:
+            # Get all configuration controls
+            config_controls = ['axis_stepper', 'serial_stepper', 'current_limit_stepper', 'max_speed_stepper']
+            
+            # Update enabled/disabled state for each control
+            for control_id in config_controls:
+                control = self.query_one(f"#{control_id}")
+                if self.initialized:
+                    control.remove_class("enabled")
+                else:
+                    control.add_class("enabled")
+
+            # Update current limit display
+            current_limit_display = self.query_one("#current_limit_stepper")
+            current_limit_display.value = str(self.current_limit)  # Convert to string
+
+            # Update max speed display
+            max_speed_display = self.query_one("#max_speed_stepper")
+            max_speed_display.value = str(self.max_speed)  # Convert to string
+
+            # Update divisions display
+            divisions_display = self.query_one("#divisions_stepper")
+            divisions_display.value = str(self.divisions)  # Convert to string
+
+            # Update min position display
+            min_position_display = self.query_one("#min_position_stepper")
+            min_position_display.value = str(self.min_position)  # Convert to string
+
+            # Update max position display
+            max_position_display = self.query_one("#max_position_stepper")
+            max_position_display.value = str(self.max_position)  # Convert to string
+
+            # Power button (disabled during scan)
+            power_button = self.query_one("#power_stepper")
+            power_button.disabled = self.scan_state != ScanState.IDLE
+            
+            # Energize button (always enabled when ON)
+            energize_button = self.query_one("#energize_stepper")
+            energize_button.disabled = not self.initialized
+            energize_button.label = "Deenergize" if self.energized else "Energize"
+            if self.energized:
+                energize_button.add_class("energized")
             else:
-                control.remove_class("enabled")
-
-        # Power button (disabled during scan)
-        power_button = self.query_one("#power_stepper")
-        power_button.label = "Off" if self.initialized else "On"
-        power_button.disabled = scanning_in_progress
-        power_button.add_class("enabled")
-        if scanning_in_progress:
-            power_button.remove_class("enabled")
-
-        # Energize button (always enabled when ON)
-        energize_button = self.query_one("#energize_stepper")
-        energize_button.disabled = not self.initialized
-        energize_button.label = "Deenergize" if self.energized else "Energize"
-        if self.energized:
-            energize_button.add_class("energized")
-        else:
-            energize_button.remove_class("energized")
-        if not energize_button.disabled:
-            energize_button.add_class("enabled")
-        else:
-            energize_button.remove_class("enabled")
-
-        # Zero button (always enabled when ON)
-        zero_button = self.query_one("#zero_stepper")
-        zero_button.disabled = not self.initialized
-        if not zero_button.disabled:
-            zero_button.add_class("enabled")
-        else:
-            zero_button.remove_class("enabled")
-
-        # Position inputs (disabled during scan)
-        position_controls = ["divisions_stepper", "min_position_stepper", "max_position_stepper"]
-        for control_id in position_controls:
-            control = self.query_one(f"#{control_id}")
-            control.disabled = not self.initialized or scanning_in_progress
-            if not control.disabled:
-                control.add_class("enabled")
+                energize_button.remove_class("energized")
+            if not energize_button.disabled:
+                energize_button.add_class("enabled")
             else:
-                control.remove_class("enabled")
+                energize_button.remove_class("enabled")
 
-        # Scan button (enabled when ON and ENERGIZED, or when scanning is in progress)
-        scan_button = self.query_one("#run_stepper")
-        scan_button.disabled = not ((self.initialized and self.energized) or scanning_in_progress)
-        scan_button.label = "Stop" if scanning_in_progress else "Scan"
-        if not scan_button.disabled:
-            scan_button.add_class("enabled")
-        else:
-            scan_button.remove_class("enabled")
+            # Zero button (always enabled when ON)
+            zero_button = self.query_one("#zero_stepper")
+            zero_button.disabled = not self.initialized
+            if not zero_button.disabled:
+                zero_button.add_class("enabled")
+            else:
+                zero_button.remove_class("enabled")
+
+            # Position inputs (disabled during scan)
+            position_controls = ["divisions_stepper", "min_position_stepper", "max_position_stepper"]
+            for control_id in position_controls:
+                control = self.query_one(f"#{control_id}")
+                control.disabled = not self.initialized or self.scan_state != ScanState.IDLE
+                if not control.disabled:
+                    control.add_class("enabled")
+                else:
+                    control.remove_class("enabled")
+
+            # Scan button (enabled when ON and ENERGIZED, or when scanning is in progress)
+            scan_button = self.query_one("#run_stepper")
+            scan_button.disabled = not ((self.initialized and self.energized) or self.scan_state != ScanState.IDLE)
+            scan_button.label = "Stop" if self.scan_state != ScanState.IDLE else "Scan"
+            if not scan_button.disabled:
+                scan_button.add_class("enabled")
+            else:
+                scan_button.remove_class("enabled")
+
+        except Exception as e:
+            logger.error(f"Error updating control states: {e}")
 
     def update_is_moving(self) -> None:
         """Update the is moving state of the stepper motor"""
@@ -427,11 +449,11 @@ class StepperMotor(Static):
         button_id = event.button.id
         new_target_position = int(float(self.target_position))
         self.target_position = new_target_position
-        print(self.id, " target position: ", self.target_position)
+        logger.debug(f"{self.id} target position: {self.target_position}")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle a button press"""
-        print(self.id, " button pressed: ", event.button.id)
+        logger.debug(f"{self.id} button pressed: {event.button.id}")
         
         if event.button.id == "power_stepper":
             self.update_initialized(event)
@@ -510,7 +532,7 @@ class StepperMotor(Static):
         if event.select.id == "usb_select":
             # Get the actual USB ID value from the selection
             selected_usb = event.value  # This is the raw value from the select
-            print(f"{self.id} USB ID selected: {selected_usb}")
+            logger.debug(f"{self.id} USB ID selected: {selected_usb}")
             
             # Save the USB ID to settings
             if self.settings:
@@ -522,12 +544,12 @@ class StepperMotor(Static):
             # Update the UI to reflect the change
             self.update_status()
         else:
-            print(self.id, " select changed to: ", event.value)
+            logger.debug(f"{self.id} select changed to: {event.value}")
             stepper_num = self.id.split("_")[-1]
             
             if event.select.id == "axis_stepper":
                 self.axis = event.value
-                print(self.id, " axis: ", self.axis)
+                logger.debug(f"{self.id} axis: {self.axis}")
                 self.settings.queue_save(stepper_num, "axis", event.value)
                 
                 # Update the title to match the selected axis
@@ -536,18 +558,18 @@ class StepperMotor(Static):
                 
             elif event.select.id == "serial_stepper":
                 self.serial_number = event.value
-                print(self.id, " serial number: ", self.serial_number)
+                logger.debug(f"{self.id} serial number: {self.serial_number}")
                 self.settings.queue_save(stepper_num, "serial", event.value)
                 
             elif event.select.id == "current_limit_stepper":
                 self.current_limit = event.value
                 # Get the mA value from the options tuple for display
                 current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
-                print(f"{self.id} current limit set to: {current_ma}")
+                logger.debug(f"{self.id} current limit set to: {current_ma}")
                 self.settings.queue_save(stepper_num, "current_limit", event.value)
                 
-                # Update the motor if it's connected and energized
-                if self.tic and self.energized:
+                # Update the motor if it's connected
+                if self.tic:
                     self.tic.set_current_limit(int(event.value))
                     self.tic.exit_safe_start()
 
@@ -743,7 +765,7 @@ class StepperMotor(Static):
         # Update button states for scanning
         self.update_control_states()
         
-        print(f"{self.id} starting scan with {len(positions)} positions")
+        logger.info(f"{self.id} starting scan with {len(positions)} positions")
 
     def stop_scan(self) -> None:
         """Stop the current scan"""
@@ -759,7 +781,7 @@ class StepperMotor(Static):
             self.tic.halt_and_set_position(current_pos)
             self.target_position = current_pos
             self.tic.exit_safe_start()
-            print(f"{self.id} motor halted at position {current_pos}")
+            logger.info(f"{self.id} motor halted at position {current_pos}")
         
         # Reset scan state
         self.scan_state = ScanState.IDLE
@@ -778,7 +800,7 @@ class StepperMotor(Static):
         # Update button states after scan
         self.update_control_states()
         
-        print(f"{self.id} scan stopped")
+        logger.info(f"{self.id} scan stopped")
 
     def update_button_state(self) -> None:
         """Update run button state after widgets are mounted"""

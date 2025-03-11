@@ -15,6 +15,10 @@ import json
 import re
 from settings import SettingsManager
 from pathlib import Path
+import logging
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 class CameraManager(Static):
     """A widget to manage camera operations."""
@@ -85,6 +89,13 @@ class CameraManager(Static):
         
         # Load settings if available
         self.load_settings()
+        
+        logger.info("Initializing CameraManager")
+        try:
+            # Your initialization code...
+            pass
+        except Exception as e:
+            logger.error(f"Error initializing CameraManager: {e}")
     
     def load_settings(self) -> None:
         """Load camera settings from settings manager."""
@@ -110,25 +121,26 @@ class CameraManager(Static):
                     if exif_file.exists():
                         with open(exif_file, 'r') as f:
                             self.exif_data = json.load(f)
-                        print("Loaded EXIF data from exif.json")
+                        logger.debug("Loaded EXIF data from exif.json")
                 except Exception as e:
-                    print(f"Error loading EXIF data: {e}")
+                    logger.debug(f"Error loading EXIF data: {e}")
+            logger.debug("Loading camera settings")
     
     def save_settings(self) -> None:
         """Save camera settings to the settings manager."""
         if self.settings_manager and hasattr(self.settings_manager, 'settings'):
             try:
-                # Get current values from UI without triggering updates
+                # Create settings dictionary with current instance values
                 camera_settings = {
-                    "subject": self.query_one("#subject_input").value,
-                    "owner": self.query_one("#owner_input").value,
+                    "subject": self.subject,
+                    "owner": self.owner,
                     "detail": self.detail,
-                    "project_name": self.query_one("#project_input").value,
-                    "subject_id": self.query_one("#subject_id_input").value,
-                    "scale": self.query_one("#scale_input").value,
-                    "copyright": self.query_one("#copyright_input").value,
-                    "notes": self.query_one("#notes_input").value,
-                    "software": self.query_one("#software_input").value,
+                    "project_name": self.project_name,
+                    "subject_id": self.subject_id,
+                    "scale": self.scale,
+                    "copyright": self.copyright,
+                    "notes": self.notes,
+                    "software": self.software,
                     "selected_camera": self.selected_camera,
                     "exif_string_format": True,
                     "exif_data": self.exif_data
@@ -136,11 +148,10 @@ class CameraManager(Static):
                 
                 # Update settings directly
                 self.settings_manager.settings['camera'] = camera_settings
-                self.settings_manager.save_queue.put(self.settings_manager.settings)
-                print("Camera settings saved successfully")
+                logger.debug("Camera settings saved successfully")
                 
             except Exception as e:
-                print(f"Error saving camera settings: {e}")
+                logger.error(f"Error saving camera settings: {e}")
     
     def compose(self) -> ComposeResult:
         """Create child widgets for the camera manager."""
@@ -215,9 +226,9 @@ class CameraManager(Static):
                     # Check if the saved camera is in the current options
                     if self.selected_camera in [cam for cam in self.cameras]:
                         camera_select.value = self.selected_camera
-                        print(f"Restored previous camera selection: {self.selected_camera}")
+                        logger.debug(f"Restored previous camera selection: {self.selected_camera}")
                     else:
-                        print(f"Previously selected camera {self.selected_camera} not found in available cameras")
+                        logger.debug(f"Previously selected camera {self.selected_camera} not found in available cameras")
             
             # Enable the take photo button even if no cameras are available
             take_photo_btn = self.query_one("#take_photo_btn", Button)
@@ -236,7 +247,7 @@ class CameraManager(Static):
             # with individual fields instead of a toggle-able container
         
         except Exception as e:
-            print(f"Error in on_mount: {e}")
+            logger.error(f"Error in on_mount: {e}")
     
     def update_widget_values(self) -> None:
         """Update widget values after they're mounted"""
@@ -251,7 +262,7 @@ class CameraManager(Static):
             self.query_one("#copyright_input").value = self.copyright
             self.query_one("#notes_input").value = self.notes
         except Exception as e:
-            print(f"Error updating fields from UI: {e}")
+            logger.error(f"Error updating fields from UI: {e}")
     
     def format_exif_data(self) -> str:
         """Format EXIF data for display in the TextArea."""
@@ -336,7 +347,7 @@ class CameraManager(Static):
                     'DateTimeDigitized': self.current_date
                 })
         except Exception as e:
-            print(f"Error updating date field: {e}")
+            logger.error(f"Error updating date field: {e}")
     
     def update_detail_field(self) -> None:
         """Update the detail field with current stepper positions."""
@@ -371,18 +382,36 @@ class CameraManager(Static):
     
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events."""
-        # Save settings when user edits metadata fields
-        if event.input.id in ["subject_input", "owner_input", "project_input", 
-                             "subject_id_input", "scale_input", "software_input",
-                             "copyright_input", "notes_input"]:
-            # Fix the lambda to accept the event argument
+        try:
+            # Update instance variables when inputs change
+            if event.input.id == "subject_input":
+                self.subject = event.value
+            elif event.input.id == "owner_input":
+                self.owner = event.value
+            elif event.input.id == "project_input":
+                self.project_name = event.value
+            elif event.input.id == "subject_id_input":
+                self.subject_id = event.value
+            elif event.input.id == "scale_input":
+                self.scale = event.value
+            elif event.input.id == "software_input":
+                self.software = event.value
+            elif event.input.id == "copyright_input":
+                self.copyright = event.value
+            elif event.input.id == "notes_input":
+                self.notes = event.value
+            
+            # Save settings after a short delay
             self.app.call_later(lambda _: self.save_settings(), 1)
+            
+        except Exception as e:
+            logger.error(f"Error handling input change: {e}")
     
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle select change events."""
         if event.select.id == "camera_select":
             self.selected_camera = event.value
-            print(f"Selected camera: {self.selected_camera}")
+            logger.debug(f"Selected camera: {self.selected_camera}")
             
             # Don't trigger a save here - let the user explicitly save with Update EXIF
     
@@ -443,7 +472,7 @@ class CameraManager(Static):
                 text=True, 
                 check=True
             )
-            print("Connected Cameras: ", result.stdout)
+            logger.debug("Connected Cameras: ", result.stdout)
             
             # Parse the output to extract camera models
             lines = result.stdout.strip().split('\n')
@@ -495,22 +524,22 @@ class CameraManager(Static):
             exif_file = Path(__file__).parent / "exif.json"
             with open(exif_file, 'w') as f:
                 json.dump(serializable_exif, f, indent=2)
-            print(f"EXIF data saved to {exif_file}")
+            logger.debug(f"EXIF data saved to {exif_file}")
             
             return serializable_exif
         except Exception as e:
-            print(f"Error saving EXIF data: {e}")
+            logger.error(f"Error saving EXIF data: {e}")
             return None
 
     @work
     async def extract_camera_exif(self) -> None:
         """Extract EXIF data and save to settings."""
         if not self.selected_camera:
-            print("No camera selected")
+            logger.debug("No camera selected")
             return
         
         try:
-            print(f"\nUpdating EXIF data for camera: {self.selected_camera}")
+            logger.debug(f"\nUpdating EXIF data for camera: {self.selected_camera}")
             
             # Get current values from UI
             self.subject = self.query_one("#subject_input").value
@@ -549,9 +578,9 @@ class CameraManager(Static):
                 'DateTimeDigitized': self.current_date
             })
             
-            print("Updated EXIF fields:")
+            logger.debug("Updated EXIF fields:")
             for key, value in self.exif_data.items():
-                print(f"  {key}: {value}")
+                logger.debug(f"  {key}: {value}")
             
             # Save EXIF data to separate file
             serializable_exif = self.save_exif_data()
@@ -574,10 +603,10 @@ class CameraManager(Static):
                 # Update settings
                 self.settings_manager.settings['camera'] = camera_settings
                 self.settings_manager.save_queue.put(self.settings_manager.settings)
-                print("Camera settings saved to settings.json")
+                logger.debug("Camera settings saved to settings.json")
             
         except Exception as e:
-            print(f"Error updating EXIF data: {e}")
+            logger.error(f"Error updating EXIF data: {e}")
     
     def update_exif_status(self, message):
         """Update the EXIF status area with a message."""
@@ -599,7 +628,7 @@ class CameraManager(Static):
             # Update the display
             exif_status.update(current_text)
         except Exception as e:
-            print(f"Could not update EXIF status: {e}")
+            logger.error(f"Could not update EXIF status: {e}")
     
     def update_input_field(self, field_id, value):
         """Safely update an input field if it exists."""
@@ -607,7 +636,7 @@ class CameraManager(Static):
             input_field = self.query_one(f"#{field_id}", Input)
             input_field.value = str(value)
         except Exception as e:
-            print(f"Could not update field {field_id}: {e}")
+            logger.error(f"Could not update field {field_id}: {e}")
     
     def create_thumbnail(self, img):
         """Create a thumbnail image for EXIF data."""
@@ -622,38 +651,10 @@ class CameraManager(Static):
         return thumb_buffer.getvalue()
     
     def create_empty_image(self, filename: str) -> bool:
-        """Create an empty image with text indicating no camera was connected."""
+        """Create an empty image with EXIF data."""
         try:
-            # Create a blank image with gray background
-            width, height = 1280, 720
-            img = Image.new('RGB', (width, height), color=(200, 200, 200))
-            draw = ImageDraw.Draw(img)
-            
-            # Add text to the image
-            text = "No camera connected"
-            text_position = (width // 2, height // 2)
-            
-            # Try to use a system font, fall back to default if not available
-            try:
-                font = ImageFont.truetype("Arial", 36)
-            except IOError:
-                font = ImageFont.load_default()
-            
-            # Calculate text size to center it
-            text_width = draw.textlength(text, font=font)
-            text_position = (width // 2 - text_width // 2, height // 2 - 18)
-            
-            # Draw the text
-            draw.text(text_position, text, fill=(0, 0, 0), font=font)
-            
-            # Add metadata text
-            metadata_text = f"Date: {self.current_date}\nSubject: {self.subject}\nOwner: {self.owner}\nDetail: {self.detail}"
-            metadata_position = (20, height - 100)
-            draw.text(metadata_position, metadata_text, fill=(0, 0, 0), font=font)
-            
-            # Update pixel dimensions
-            self.pixel_x_dimension = str(width)
-            self.pixel_y_dimension = str(height)
+            # Create a small black image
+            img = Image.new('RGB', (1280, 720), color='black')
             
             # Create a thumbnail
             thumbnail_data = self.create_thumbnail(img)
@@ -669,10 +670,10 @@ class CameraManager(Static):
             # Save the image with EXIF data
             img.save(filename, exif=exif)
             
-            print(f"Created empty image: {filename}")
+            logger.info(f"Created empty image: {filename}")
             return True
         except Exception as e:
-            print(f"Error creating empty image: {e}")
+            logger.error(f"Error creating empty image: {e}")
             return False
     
     @work
@@ -763,7 +764,7 @@ class CameraManager(Static):
                     # Save the image with updated EXIF data
                     img.save(filename, exif=exif)
                 except Exception as e:
-                    print(f"Error adding EXIF data: {e}")
+                    logger.error(f"Error adding EXIF data: {e}")
             else:
                 self.status = f"Error capturing photo: {result.stderr}"
                 # Fall back to empty image if camera capture fails
@@ -830,9 +831,10 @@ class CameraManager(Static):
             
             # Save the image with EXIF data
             img.save(filename, exif=exif)
+            logger.debug("Image saved with EXIF data")
             return True
         except Exception as e:
-            print(f"Error saving image with EXIF data: {e}")
+            logger.error(f"Error saving image with EXIF data: {e}")
             return False
 
     def update_fields_from_ui(self) -> None:
@@ -849,4 +851,4 @@ class CameraManager(Static):
             self.notes = self.query_one("#notes_input").value
             
         except Exception as e:
-            print(f"Error updating fields from UI: {e}")
+            logger.error(f"Error updating fields from UI: {e}")
