@@ -160,11 +160,18 @@ cython_debug/
 #.idea/
 
 # Image files in any directory
-**/*.png
-**/*.jpg
-**/*.jpeg
-**/*.cr3
-*.png
-*.jpg
-*.jpeg
-*.cr3
+# **/*.png
+# **/*.jpg
+# **/*.jpeg
+# **/*.cr3
+# *.png
+# *.jpg
+# *.jpeg
+# *.cr3
+
+# Image files in results directory
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.cr3
+
