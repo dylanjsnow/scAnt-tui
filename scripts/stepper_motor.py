@@ -3,7 +3,7 @@ from textual.widgets import Static, Button, Input, Select, Label
 from textual.reactive import reactive
 from settings import SettingsManager
 from scan import ScanManager
-from utils import get_axes, get_stepper_motor_serial_numbers, ScanState
+from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraState, CameraMessage
 from ticlib import TicUSB
 from textual import on
 from textual.app import App, ComposeResult
@@ -15,6 +15,8 @@ from max_position import MaxPositionDisplay
 from min_position import MinPositionDisplay
 from current_limit import CurrentLimitDisplay
 import logging
+from camera import CameraManager
+from multiprocessing import Queue
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -44,11 +46,12 @@ class StepperMotor(Static):
     max_speed = reactive(0)  # Add this with other reactive properties
     usb_id = reactive(None)  # Added for USB ID selection
     
-    def __init__(self, stepper_id: str, settings_manager=None, *args, **kwargs):
+    def __init__(self, stepper_id: str, camera_queue: Queue, settings_manager=None, *args, **kwargs):
         """Initialize stepper motor interface.
         
         Args:
             stepper_id: The stepper number (1, 2, or 3)
+            camera_queue: Queue for camera communication
             settings_manager: Optional shared settings manager instance
         """
         # Ensure ID is set before calling parent init
@@ -104,6 +107,8 @@ class StepperMotor(Static):
             ("2962 mA (31)", "31"),
             ("3093 mA (32)", "32"),
         )
+        
+        self.camera_queue = camera_queue  # Queue for camera communication
         
         logger.info(f"Initialized StepperMotor {self.id} with stepper_num {self.stepper_num}")
 
@@ -693,34 +698,37 @@ class StepperMotor(Static):
             return []
 
     def update_scan_state(self) -> None:
-        """Update the scanning state machine"""
-        if self.scan_state == ScanState.IDLE:
-            return
+        """Update the scan state based on current position"""
+        try:
+            if self.scan_state == ScanState.MOVING:
+                if self.current_position == self.target_position:
+                    self.scan_state = ScanState.WAITING
+                    logger.debug(f"Motor {self.id} reached target, entering wait state")
+                    
+                    # If this is the forward axis motor (stepper_1), request photo
+                    if self.stepper_num == "1":  # Forward axis
+                        try:
+                            # Send message to camera process
+                            message = (CameraMessage.TAKE_PHOTO, {
+                                'position': self.current_position,
+                                'axis': self.axis
+                            })
+                            self.camera_queue.put(message)
+                            logger.info(f"Requested photo at position {self.current_position}")
+                        except Exception as e:
+                            logger.error(f"Failed to request photo: {e}")
+                    
+                    # Set timer for next movement
+                    self.set_timer(self.DIVISION_WAIT_TIME, self.continue_scan)
+                    
+            elif self.scan_state == ScanState.WAITING:
+                # Waiting is handled by continue_scan callback
+                pass
 
-        positions = self.get_division_positions()
-        if not positions:
-            self.scan_state = ScanState.IDLE
-            return
+        except Exception as e:
+            logger.error(f"Error updating scan state: {e}")
 
-        # Update progress display
-        progress_display = self.query_one(ProgressDisplay)
-        progress_display.update_progress(
-            self.current_division,
-            len(positions),
-            self.current_position,
-            self.target_position,
-            wait_time=self.DIVISION_WAIT_TIME
-        )
-
-        if self.scan_state == ScanState.MOVING:
-            if self.is_position_reached():
-                self.scan_state = ScanState.WAITING
-                self._wait_timer = self.set_timer(self.DIVISION_WAIT_TIME, self.finish_waiting)
-        elif self.scan_state == ScanState.WAITING:
-            # Waiting is handled by finish_waiting callback
-            pass
-
-    def finish_waiting(self) -> None:
+    def continue_scan(self) -> None:
         """Called after waiting at a position"""
         if self.scan_state != ScanState.WAITING:
             return

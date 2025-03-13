@@ -6,6 +6,8 @@ from stepper_motor import StepperMotor
 from camera import CameraManager
 from utils import ScanState
 from settings import SettingsManager
+from scan import ScanManager
+from multiprocessing import Queue
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -33,6 +35,8 @@ class ScannerApp(App):
         logger.info("Initializing ScannerApp")
         try:
             self.settings_manager = SettingsManager("settings.json")
+            self.camera_queue = Queue()  # Create queue for camera communication
+            logger.info("Initialized camera communication queue")
             logger.info("Settings manager initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize settings manager: {e}")
@@ -46,24 +50,27 @@ class ScannerApp(App):
             
             # Main app container as a vertical layout
             with Container(id="app_container"):
-                # Control buttons for all motors at the very top
-                with Horizontal(id="control_buttons"):
-                    yield Button("Home All", id="home_all_btn", variant="primary")
-                    yield Button("Stop All", id="stop_all_btn", variant="error")
-                
+                yield ScanManager(id="scan_manager")                
                 # Stepper motors in a vertical container to show in a column
+                # Camera manager below the control buttons
+                logger.info("Creating camera manager")
+                yield CameraManager(
+                    camera_queue=self.camera_queue,  # Pass queue to camera manager
+                    settings_manager=self.settings_manager
+                )
                 with Vertical(id="stepper_container"):
                     logger.info("Creating stepper motor instances")
                     # Create stepper motors with shared settings manager
                     for i in range(1, 4):
                         logger.debug(f"Creating stepper motor {i}")
-                        yield StepperMotor(stepper_id=str(i), settings_manager=self.settings_manager)
-                
-                # Camera manager below the control buttons
-                logger.info("Creating camera manager")
-                yield CameraManager(settings_manager=self.settings_manager)
+                        yield StepperMotor(
+                            stepper_id=str(i),
+                            camera_queue=self.camera_queue,  # Pass queue to each motor
+                            settings_manager=self.settings_manager
+                        )
             
-            yield Footer()
+            
+            # yield Footer()
             logger.debug("App composition completed successfully")
             
         except Exception as e:
@@ -100,14 +107,15 @@ class ScannerApp(App):
         logger.info("App mounted")
         
     def on_unmount(self) -> None:
-        """Handle app unmount event"""
-        logger.info("App unmounting")
+        """Clean up when app closes"""
         try:
-            # Save all settings before shutdown
+            # Save settings
             self.settings_manager.save_all()
-            logger.info("Settings saved on shutdown")
+            # Close queue
+            self.camera_queue.close()
+            logger.info("App cleanup complete")
         except Exception as e:
-            logger.error(f"Error saving settings on shutdown: {e}")
+            logger.error(f"Error during app cleanup: {e}")
 
 if __name__ == "__main__":
     try:

@@ -22,13 +22,15 @@ class ScanManager(Static):
         def get_steppers():
             try:
                 self.stepper_motors = [
-                    self.app.query_one("#stepper_motor_1"),
-                    self.app.query_one("#stepper_motor_2"), 
-                    self.app.query_one("#stepper_motor_3")
+                    self.app.query_one("#stepper_1"),
+                    self.app.query_one("#stepper_2"), 
+                    self.app.query_one("#stepper_3")
                 ]
-                logger.debug(f"Found {len(self.stepper_motors)} stepper motors")
+                logger.info(f"Successfully found and stored {len(self.stepper_motors)} stepper motors: {[motor.id for motor in self.stepper_motors]}")
             except Exception as e:
                 logger.error(f"Error getting stepper motors: {e}")
+                # Try again after a short delay
+                self.set_timer(0.5, get_steppers)
             
         self.set_timer(0.1, get_steppers)
         logger.debug("ScanManager mounted")
@@ -36,7 +38,7 @@ class ScanManager(Static):
     def compose(self) -> ComposeResult:
         """Create child widgets for scan management"""
         yield Button("Start Full Scan", id="start_full_scan", variant="success")
-        yield Button("Stop All", id="stop_all_scan", variant="error")
+        yield Button("EMERGENCY STOP", id="emergency_stop", variant="error", classes="emergency-stop")
         logger.debug("ScanManager widgets composed")
         
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -47,8 +49,8 @@ class ScanManager(Static):
             
             if event.button.id == "start_full_scan":
                 self.start_full_scan()
-            elif event.button.id == "stop_all_scan":
-                self.stop_all_scans()
+            elif event.button.id == "emergency_stop":
+                self.emergency_stop()
                 
         except Exception as e:
             logger.error(f"Error handling button press: {e}")
@@ -82,8 +84,6 @@ class ScanManager(Static):
         try:
             start_button = self.query_one("#start_full_scan")
             start_button.disabled = True
-            stop_button = self.query_one("#stop_all_scan") 
-            stop_button.disabled = False
             logger.debug("Scan buttons updated")
         except Exception as e:
             logger.error(f"Error updating scan buttons: {e}")
@@ -91,28 +91,6 @@ class ScanManager(Static):
         # Set up monitoring of scan completion
         self.set_interval(0.1, self.check_scan_completion)
         logger.debug("Scan completion monitoring started")
-        
-    def stop_all_scans(self) -> None:
-        """Stop scanning on all motors"""
-        if not self.stepper_motors:
-            logger.warning("No stepper motors available to stop")
-            return
-            
-        self.scanning = False
-        for motor in self.stepper_motors:
-            if motor.scan_state != ScanState.IDLE:
-                motor.stop_scan()
-                logger.info(f"Stopped scan on motor {motor.id}")
-                
-        # Update button states
-        try:
-            start_button = self.query_one("#start_full_scan")
-            start_button.disabled = False
-            stop_button = self.query_one("#stop_all_scan")
-            stop_button.disabled = True
-            logger.debug("Scan buttons updated after stop")
-        except Exception as e:
-            logger.error(f"Error updating scan buttons after stop: {e}")
         
     def check_scan_completion(self) -> bool:
         """Check if all motors have completed scanning"""
@@ -133,8 +111,6 @@ class ScanManager(Static):
             try:
                 start_button = self.query_one("#start_full_scan")
                 start_button.disabled = False
-                stop_button = self.query_one("#stop_all_scan")
-                stop_button.disabled = True
                 logger.debug("Scan buttons updated after completion")
             except Exception as e:
                 logger.error(f"Error updating scan buttons after completion: {e}")
@@ -142,3 +118,29 @@ class ScanManager(Static):
             return False  # Stop the interval
             
         return True  # Continue checking
+
+    def emergency_stop(self) -> None:
+        """Immediately stop all stepper motors regardless of state"""
+        logger.warning("Emergency stop triggered")
+        
+        if not self.stepper_motors:
+            logger.error("Emergency stop failed - No stepper motors available. Current stepper_motors list is empty.")
+            return
+            
+        logger.info(f"Attempting to stop {len(self.stepper_motors)} motors: {[motor.id for motor in self.stepper_motors]}")
+        self.scanning = False
+        
+        for motor in self.stepper_motors:
+            try:
+                motor.stop_scan()
+                logger.info(f"Successfully emergency stopped motor {motor.id}")
+            except Exception as e:
+                logger.error(f"Failed to emergency stop motor {motor.id}: {e}")
+            
+        # Update button states
+        try:
+            start_button = self.query_one("#start_full_scan")
+            start_button.disabled = False
+            logger.debug("Scan buttons updated after emergency stop")
+        except Exception as e:
+            logger.error(f"Error updating scan buttons after emergency stop: {e}")

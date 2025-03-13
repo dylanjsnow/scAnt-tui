@@ -1,5 +1,5 @@
 import subprocess   
-from enum import Enum
+from enum import Enum, auto
 import logging
 
 # Create logger for this module
@@ -31,6 +31,17 @@ def get_inputs_to_initialize():
 
 class ScanState(Enum):
     """States for the scanning process"""
-    IDLE = "idle"
-    MOVING = "moving" 
-    WAITING = "waiting"
+    IDLE = auto()
+    MOVING = auto()
+    WAITING = auto()
+
+class CameraState(Enum):
+    IDLE = auto()
+    CAPTURING = auto()
+    WAITING = auto()
+
+class CameraMessage:
+    """Message types for camera queue"""
+    TAKE_PHOTO = "TAKE_PHOTO"
+    PHOTO_COMPLETE = "PHOTO_COMPLETE"
+    PHOTO_ERROR = "PHOTO_ERROR"
