@@ -19,6 +19,8 @@ import logging
 from utils import CameraState, CameraMessage
 from multiprocessing import Queue
 import shutil
+from exif import ExifManager
+import gphoto2 as gp
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -56,39 +58,8 @@ class CameraManager(Static):
         self.notes = ""
         self.software = "MacroScans v1.0"
         
-        # Default EXIF metadata
-        self.exif_data = {
-            'Make': 'Scanner3D',
-            'Model': 'ScannerApp',
-            'Software': self.software,
-            'Orientation': 1,  # top-left
-            'DateTime': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-            'YCbCrPositioning': 1,  # centered
-            'XResolution': (72, 1),
-            'YResolution': (72, 1),
-            'ResolutionUnit': 2,  # inches
-            'ExposureTime': (1, 100),  # 1/100 second
-            'FNumber': (40, 10),  # f/4.0
-            'ExposureProgram': 1,  # Manual
-            'ExifVersion': b'0231',
-            'DateTimeOriginal': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-            'DateTimeDigitized': datetime.now().strftime("%Y:%m:%d %H:%M:%S"),
-            'ComponentsConfiguration': b'\x01\x02\x03\x00',  # YCbCr
-            'CompressedBitsPerPixel': (4, 1),
-            'ExposureBiasValue': (0, 1),
-            'MaxApertureValue': (20, 10),
-            'MeteringMode': 5,  # Pattern
-            'Flash': 16,  # No flash
-            'FocalLength': (200, 10),  # 20mm
-            'MakerNote': b'',
-            'FlashpixVersion': b'0100',
-            'ColorSpace': 1,  # sRGB
-            'PixelXDimension': 1280,
-            'PixelYDimension': 720,
-            'FileSource': b'\x03',  # DSC
-            'InteroperabilityIndex': 'R98',
-            'InteroperabilityVersion': b'0100',
-        }
+        # Initialize EXIF manager
+        self.exif_manager = ExifManager()
         
         # Load settings if available
         self.load_settings()
@@ -97,11 +68,6 @@ class CameraManager(Static):
         self.state = CameraState.IDLE
         
         logger.info("Initializing CameraManager")
-        try:
-            # Your initialization code...
-            pass
-        except Exception as e:
-            logger.error(f"Error initializing CameraManager: {e}")
     
     def load_settings(self) -> None:
         """Load camera settings from settings manager."""
@@ -149,12 +115,11 @@ class CameraManager(Static):
                     "software": self.software,
                     "selected_camera": self.selected_camera,
                     "exif_string_format": True,
-                    "exif_data": self.exif_data
+                    "exif_data": self.exif_manager.get_formatted_exif_data()
                 }
                 
-                # Update settings directly
+                # Update settings and save
                 self.settings_manager.settings['camera'] = camera_settings
-                # Use save_all() instead of save_settings()
                 self.settings_manager.save_all()
                 logger.debug("Camera settings saved successfully")
                 
@@ -429,6 +394,7 @@ class CameraManager(Static):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
         if event.button.id == "take_photo_btn":
+            logger.debug("Take Photo Button Pressed")
             self.take_photo({'position': 0, 'axis': 'test'})
         elif event.button.id == "update_exif_btn":
             self.extract_camera_exif()
@@ -506,140 +472,7 @@ class CameraManager(Static):
             self.status = f"Error: {str(e)}"
             return []
     
-    @staticmethod
-    def convert_exif_for_json(exif_data: dict) -> dict:
-        """Convert EXIF data to JSON-serializable format."""
-        serializable_exif = {}
-        for key, value in exif_data.items():
-            if isinstance(value, bytes):
-                # Convert bytes to hex string
-                serializable_exif[key] = value.hex()
-            elif isinstance(value, tuple):
-                # Convert rational numbers to string representation
-                if len(value) == 2:
-                    serializable_exif[key] = f"{value[0]}/{value[1]}"
-                else:
-                    serializable_exif[key] = str(value)
-            else:
-                # Convert other types to strings
-                serializable_exif[key] = str(value)
-        return serializable_exif
 
-    def save_exif_data(self) -> None:
-        """Save EXIF data to separate exif.json file."""
-        try:
-            # Convert EXIF data to serializable format
-            serializable_exif = self.convert_exif_for_json(self.exif_data)
-            
-            # Save to exif.json
-            exif_file = Path(__file__).parent / "exif.json"
-            with open(exif_file, 'w') as f:
-                json.dump(serializable_exif, f, indent=2)
-            logger.debug(f"EXIF data saved to {exif_file}")
-            
-            return serializable_exif
-        except Exception as e:
-            logger.error(f"Error saving EXIF data: {e}")
-            return None
-
-    @work
-    async def extract_camera_exif(self) -> None:
-        """Extract EXIF data and save to settings."""
-        if not self.selected_camera:
-            logger.debug("No camera selected")
-            return
-        
-        try:
-            logger.debug(f"\nUpdating EXIF data for camera: {self.selected_camera}")
-            
-            # Get current values from UI
-            self.subject = self.query_one("#subject_input").value
-            self.owner = self.query_one("#owner_input").value  # This is now the Artist
-            self.project_name = self.query_one("#project_input").value
-            self.subject_id = self.query_one("#subject_id_input").value
-            self.scale = self.query_one("#scale_input").value
-            self.software = self.query_one("#software_input").value
-            self.copyright = self.query_one("#copyright_input").value
-            self.notes = self.query_one("#notes_input").value
-            
-            # Create comprehensive image description
-            image_description = (
-                f"Date: {self.current_date}\n"
-                f"Subject: {self.subject}\n"
-                f"Artist: {self.owner}\n"
-                f"Detail: {self.detail}\n"
-                f"Project: {self.project_name}\n"
-                f"Subject ID: {self.subject_id}\n"
-                f"Scale: {self.scale}\n"
-                f"Software: {self.software}\n"
-                f"Copyright: {self.copyright}\n"
-                f"Notes: {self.notes}"
-            )
-            
-            # Update EXIF data
-            self.exif_data.update({
-                'Make': 'Canon',  # Default manufacturer
-                'Model': self.selected_camera,
-                'Software': self.software,
-                'Copyright': self.copyright,
-                'ImageDescription': image_description,
-                'Artist': self.owner,  # Set Artist from Owner field
-                'DateTime': self.current_date,
-                'DateTimeOriginal': self.current_date,
-                'DateTimeDigitized': self.current_date
-            })
-            
-            logger.debug("Updated EXIF fields:")
-            for key, value in self.exif_data.items():
-                logger.debug(f"  {key}: {value}")
-            
-            # Save EXIF data to separate file
-            serializable_exif = self.save_exif_data()
-            
-            if self.settings_manager:
-                # Save only camera settings (no EXIF data)
-                camera_settings = {
-                    "subject": self.subject,
-                    "owner": self.owner,
-                    "detail": self.detail,
-                    "project_name": self.project_name,
-                    "subject_id": self.subject_id,
-                    "scale": self.scale,
-                    "copyright": self.copyright,
-                    "notes": self.notes,
-                    "software": self.software,
-                    "selected_camera": self.selected_camera
-                }
-                
-                # Update settings
-                self.settings_manager.settings['camera'] = camera_settings
-                self.settings_manager.save_all()
-                logger.debug("Camera settings saved to settings.json")
-            
-        except Exception as e:
-            logger.error(f"Error updating EXIF data: {e}")
-    
-    def update_exif_status(self, message):
-        """Update the EXIF status area with a message."""
-        try:
-            exif_status = self.query_one("#exif_status", Static)
-            current_text = exif_status.renderable
-            
-            # If this is the first message, clear the default text
-            if current_text == "EXIF data will be shown here when extracted":
-                current_text = ""
-            
-            # Add the new message with explicit line breaks
-            # Static widget will respect \n characters
-            if current_text:
-                current_text += f"\n{message}"
-            else:
-                current_text = message
-            
-            # Update the display
-            exif_status.update(current_text)
-        except Exception as e:
-            logger.error(f"Could not update EXIF status: {e}")
     
     def update_input_field(self, field_id, value):
         """Safely update an input field if it exists."""
@@ -740,47 +573,83 @@ class CameraManager(Static):
         except Exception as e:
             logger.error(f"Error checking camera queue: {e}")
 
+    async def _capture_image(self) -> str:
+        """Capture an image using gphoto2 and return the path to the captured file."""
+        try:
+            # Initialize camera
+            camera = gp.Camera()
+            camera.init()
+            
+            logger.debug("Capturing image with gphoto2...")
+            
+            # Capture the image
+            file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
+            logger.debug(f'Camera file path: {file_path.folder}/{file_path.name}')
+            
+            # Define target path in results directory
+            os.makedirs("./results", exist_ok=True)
+            target = os.path.join("./results", f"temp_{file_path.name}")
+            
+            # Copy image from camera to computer
+            logger.debug(f'Copying image to: {target}')
+            camera_file = camera.file_get(
+                file_path.folder, 
+                file_path.name, 
+                gp.GP_FILE_TYPE_NORMAL
+            )
+            camera_file.save(target)
+            
+            # Clean up
+            camera.exit()
+            
+            return target
+            
+        except Exception as e:
+            logger.error(f"Error capturing image: {e}")
+            return None
+
     async def take_photo(self, metadata=None):
         """Take a photo with the camera and save it with metadata."""
         try:
-            self.logger.info(f"Taking photo at position {metadata['position']} on {metadata['axis']} axis")
+            logger.info(f"Taking photo at position {metadata.get('position', 'unknown')} on {metadata.get('axis', 'unknown')} axis")
+            
+            # Update state to indicate camera is busy
+            self.state = CameraState.CAPTURING
             
             # Take the photo using gphoto2
             capture_path = await self._capture_image()
             
             if not capture_path:
-                self.logger.error("Failed to capture image")
+                logger.error("Failed to capture image")
+                self.state = CameraState.IDLE
                 return False
 
-            # Save the photo with basic metadata - no EXIF extraction
-            saved = await self._save_photo(capture_path, metadata)
-            if not saved:
-                self.logger.error("Failed to save captured image")
+            # Create results directory if it doesn't exist
+            os.makedirs("./results", exist_ok=True)
+            
+            # Generate final filename with timestamp and metadata
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            position = metadata.get('position', '0') if metadata else '0'
+            axis = metadata.get('axis', 'test') if metadata else 'test'
+            final_filename = f"{timestamp}_{self.subject}_{position}_{axis}.jpg"
+            final_path = os.path.join("./results", final_filename)
+            
+            # Move the temporary file to final location
+            try:
+                shutil.move(capture_path, final_path)
+                logger.info(f"Photo saved to: {final_path}")
+            except Exception as e:
+                logger.error(f"Error saving photo: {e}")
+                self.state = CameraState.IDLE
                 return False
 
+            # Reset state to idle after successful capture
+            self.state = CameraState.IDLE
             return True
 
         except Exception as e:
-            self.logger.error(f"Error taking photo: {str(e)}")
-            return False
-
-    async def _save_photo(self, capture_path, metadata):
-        """Save the captured photo with basic metadata."""
-        try:
-            # Generate filename based on metadata
-            filename = self._generate_filename(metadata)
-            save_path = os.path.join(self.save_directory, filename)
-
-            # Copy file to save location
-            shutil.copy2(capture_path, save_path)
-            
-            # Clean up temporary capture file
-            os.remove(capture_path)
-            
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error saving photo: {str(e)}")
+            logger.error(f"Error taking photo: {str(e)}")
+            self.state = CameraState.IDLE
             return False
 
     async def update_exif_from_camera(self):
@@ -791,59 +660,27 @@ class CameraManager(Static):
             # Get current values from UI
             self.update_fields_from_ui()
             
-            # Create comprehensive image description
-            image_description = (
-                f"Date: {self.current_date}\n"
-                f"Subject: {self.subject}\n"
-                f"Artist: {self.owner}\n"
-                f"Detail: {self.detail}\n"
-                f"Project: {self.project_name}\n"
-                f"Subject ID: {self.subject_id}\n"
-                f"Scale: {self.scale}\n"
-                f"Software: {self.software}\n"
-                f"Copyright: {self.copyright}\n"
-                f"Notes: {self.notes}"
-            )
+            # Get EXIF data from camera
+            camera_exif = await self.exif_manager.get_camera_exif(self.selected_camera)
             
-            # Update EXIF data
-            self.exif_data.update({
-                'Make': 'Canon',  # Default manufacturer
-                'Model': self.selected_camera,
-                'Software': self.software,
-                'Copyright': self.copyright,
-                'ImageDescription': image_description,
-                'Artist': self.owner,
-                'DateTime': self.current_date,
-                'DateTimeOriginal': self.current_date,
-                'DateTimeDigitized': self.current_date
+            # Update EXIF data with UI values and camera data
+            self.exif_manager.update_exif_data({
+                'date': self.current_date,
+                'subject': self.subject,
+                'artist': self.owner,
+                'detail': self.detail,
+                'project_name': self.project_name,
+                'subject_id': self.subject_id,
+                'scale': self.scale,
+                'software': self.software,
+                'copyright': self.copyright,
+                'notes': self.notes,
+                'model': self.selected_camera,
+                **camera_exif  # Include any additional EXIF data from camera
             })
             
-            # Log updated fields
-            logger.debug("Updated EXIF fields:")
-            for key, value in self.exif_data.items():
-                logger.debug(f"  {key}: {value}")
-
-            # Save EXIF data to file
-            self.save_exif_data()
-            
-            # Update settings in settings manager
-            if self.settings_manager:
-                camera_settings = {
-                    "subject": self.subject,
-                    "owner": self.owner,
-                    "detail": self.detail,
-                    "project_name": self.project_name,
-                    "subject_id": self.subject_id,
-                    "scale": self.scale,
-                    "copyright": self.copyright,
-                    "notes": self.notes,
-                    "software": self.software,
-                    "selected_camera": self.selected_camera,
-                    "exif_string_format": True,
-                    "exif_data": self.exif_data
-                }
-                self.settings_manager.settings['camera'] = camera_settings
-                self.settings_manager.queue_save()  # Use queue_save instead of save_queue
+            # Save settings
+            self.save_settings()
             
             return True
 
