@@ -19,7 +19,7 @@ sudo apt install python3 python3-pip
 python3 -m venv venv
 source venv/bin/activate
 pip3 install gphoto2 --only-binary :all:
-pip3 install pyusb ticlib textual textual-dev textual[syntax] textual-slider Pillow imageio rawpy ticlib 
+pip3 install pyusb ticlib textual textual-dev textual[syntax] textual-slider Pillow imageio rawpy ticlib kafka-python[crc32c]
 ```
 3. Install the Ubuntu drivers for Stepper motor controllers ([reference](https://www.pololu.com/product/3134/resources))
 ```bash

@@ -9,11 +9,8 @@ from textual import on
 from textual.app import App, ComposeResult
 import re
 from progress_display import ProgressDisplay
-from current_position import CurrentPositionDisplay
-from target_position import TargetPositionDisplay
-from max_position import MaxPositionDisplay
-from min_position import MinPositionDisplay
-from current_limit import CurrentLimitDisplay
+from position import CurrentPositionDisplay, TargetPositionDisplay, MaxPositionDisplay, MinPositionDisplay
+from current import CurrentLimitDisplay
 import logging
 
 # Create logger for this module
