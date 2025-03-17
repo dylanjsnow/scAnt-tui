@@ -12,10 +12,13 @@ import json
 from pathlib import Path
 import logging
 from utils import CameraState, CameraMessage
-from multiprocessing import Queue
+from multiprocessing import Queue, Process
 import shutil
 import gphoto2 as gp
 from current_position import CurrentPositionDisplay
+from threading import Thread
+import queue
+from textual.message import Message
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -25,9 +28,8 @@ class CameraManager(Static):
     
     status = reactive("Ready")
     
-    def __init__(self, camera_queue: Queue, settings_manager=None, id: str = "camera_manager"):
+    def __init__(self, position_queue: Queue, settings_manager=None, id: str = "camera_manager"):
         """Initialize the camera manager."""
-        # Keep the super() call to properly initialize the parent widget
         super().__init__(id=id)
         
         self.cameras = []
@@ -46,19 +48,24 @@ class CameraManager(Static):
         # Store reference to settings manager
         self.settings_manager = settings_manager
         
+        # Queue for receiving position updates from stepper motors
+        self.position_queue = position_queue
+        self.state = CameraState.IDLE
+        
+        # Start position update process
+        self.position_process = Process(target=self._handle_position_updates, daemon=True)
+        self.position_process.start()
+        
         # Default values for metadata fields
         self.project_name = ""
         self.subject_id = ""
         self.scale = ""
         self.copyright = ""
         self.notes = ""
-        self.software = "MacroScans v1.0"
+        self.software = "scAnt-tui"
 
         # Load settings if available
         self.load_settings()
-        
-        self.camera_queue = camera_queue
-        self.state = CameraState.IDLE
         
         logger.info("Initializing CameraManager")
     
@@ -139,6 +146,30 @@ class CameraManager(Static):
                     id="date_input",
                     disabled=True
                 )
+
+                # Detail (auto-generated from stepper positions)
+                yield Label("Forward:", classes="field-label")
+                yield Input(
+                    value=f"{self.forward_position}",
+                    id="forward_position",
+                    disabled=True
+                )
+
+                # Detail (auto-generated from stepper positions)
+                yield Label("Yaw:", classes="field-label")
+                yield Input(
+                    value=f"{self.yaw_position}",
+                    id="yaw_position",
+                    disabled=True
+                )
+
+                # Detail (auto-generated from stepper positions)
+                yield Label("Tilt:", classes="field-label")
+                yield Input(
+                    value=f"{self.tilt_position}",
+                    id="tilt_position",
+                    disabled=True
+                )
                 
                 yield Label("Subject:", classes="field-label")
                 yield Input(id="subject_input", value=self.subject)
@@ -146,13 +177,7 @@ class CameraManager(Static):
                 yield Label("Artist:", classes="field-label")
                 yield Input(id="owner_input", value=self.owner)
                 
-                # Detail (auto-generated from stepper positions)
-                yield Label("Detail:", classes="field-label")
-                yield Input(
-                    value=f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}",
-                    id="detail_input",
-                    disabled=True
-                )
+                
                 
                 yield Label("Project:", classes="field-label")
                 yield Input(id="project_input", value=self.project_name)
@@ -173,7 +198,9 @@ class CameraManager(Static):
                 yield Input(id="notes_input", value=self.notes)
 
     def on_mount(self) -> None:
-        """Event handler called when widget is added to the app"""
+        """Set up queue checking when widget is mounted."""
+        self.set_interval(0.1, self.check_position_queue)
+        
         # Load settings first
         self.load_settings()
         
@@ -437,8 +464,8 @@ class CameraManager(Static):
     def check_queue(self) -> None:
         """Check for and handle camera queue messages"""
         try:
-            if not self.camera_queue.empty():
-                message_type, data = self.camera_queue.get_nowait()
+            if not self.position_queue.empty():
+                message_type, data = self.position_queue.get_nowait()
                 
                 if message_type == CameraMessage.TAKE_PHOTO:
                     if self.state == CameraState.IDLE:
@@ -449,7 +476,7 @@ class CameraManager(Static):
                     else:
                         logger.warning(f"Received photo request while camera busy (state: {self.state})")
                         # Put the message back in the queue to try again later
-                        self.camera_queue.put((message_type, data))
+                        self.position_queue.put((message_type, data))
                         
         except Exception as e:
             logger.error(f"Error checking camera queue: {e}")
@@ -540,6 +567,11 @@ class CameraManager(Static):
 
     def on_unmount(self) -> None:
         """Handle unmount event."""
+        # Terminate the position update process
+        if hasattr(self, 'position_process'):
+            self.position_process.terminate()
+            self.position_process.join()
+        
         # Stop the date timer
         if self._date_timer:
             self._date_timer.stop()
@@ -616,3 +648,55 @@ class CameraManager(Static):
             
         except Exception as e:
             logger.error(f"Error updating fields from UI: {e}")
+
+    def check_position_queue(self) -> None:
+        """Check queue for position updates."""
+        try:
+            if not self.position_queue.empty():
+                message = self.position_queue.get_nowait()
+                
+                if isinstance(message, dict):
+                    # Update positions based on message type
+                    if 'axis' in message and 'position' in message:
+                        position = str(message['position'])
+                        
+                        if message['axis'] == 'Yaw':
+                            self.yaw_position = position
+                        elif message['axis'] == 'Tilt':
+                            self.tilt_position = position
+                        elif message['axis'] == 'Forward':
+                            self.forward_position = position
+                            
+                        # Update the detail input display
+                        detail_input = self.query_one("#detail_input", Input)
+                        if detail_input:
+                            detail_input.value = f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}"
+                            
+                        logger.debug(f"Updated {message['axis']} position to {position}")
+                
+        except Exception as e:
+            logger.error(f"Error checking position queue: {e}")
+
+    def _handle_position_updates(self):
+        """Process that handles position updates from the queue."""
+        while True:
+            try:
+                # This will block until a message is available
+                message = self.position_queue.get()
+                
+                if isinstance(message, dict):
+                    if 'axis' in message and 'position' in message:
+                        position = str(message['position'])
+                        
+                        # Update positions based on axis
+                        if message['axis'] == 'Yaw':
+                            self.yaw_position = position
+                        elif message['axis'] == 'Tilt':
+                            self.tilt_position = position
+                        elif message['axis'] == 'Forward':
+                            self.forward_position = position
+                        
+                        logger.debug(f"Updated {message['axis']} position to {position}")
+                        
+            except Exception as e:
+                logger.error(f"Error handling position update: {e}")

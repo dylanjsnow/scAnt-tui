@@ -38,7 +38,9 @@
     "camera": {
         "subject": "Scan",
         "owner": "User",
-        "detail": "yaw0_tilt0_forward0",
+        "yaw_position": "0",
+        "tilt_position": "0",
+        "forward_position": "0",
         "project_name": "a",
         "subject_id": "b",
         "scale": "c",
