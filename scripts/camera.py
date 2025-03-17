@@ -35,12 +35,16 @@ class CameraManager(Static):
         self.current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.subject = "Scan"
         self.owner = "User"
-        self.detail = "yaw0_tilt0_forward0"
+        
+        # Position tracking
+        self.yaw_position = "0"
+        self.tilt_position = "0" 
+        self.forward_position = "0"
+        
         self._date_timer = None
         
         # Store reference to settings manager
         self.settings_manager = settings_manager
-        
         
         # Default values for metadata fields
         self.project_name = ""
@@ -67,7 +71,9 @@ class CameraManager(Static):
                 # Load user metadata
                 self.subject = camera_settings.get("subject", self.subject)
                 self.owner = camera_settings.get("owner", self.owner)
-                self.detail = camera_settings.get("detail", self.detail)
+                self.yaw_position = camera_settings.get("yaw_position", self.yaw_position)
+                self.tilt_position = camera_settings.get("tilt_position", self.tilt_position)
+                self.forward_position = camera_settings.get("forward_position", self.forward_position)
                 self.project_name = camera_settings.get("project_name", self.project_name)
                 self.subject_id = camera_settings.get("subject_id", self.subject_id)
                 self.scale = camera_settings.get("scale", self.scale)
@@ -86,7 +92,9 @@ class CameraManager(Static):
                 camera_settings = {
                     "subject": self.subject,
                     "owner": self.owner,
-                    "detail": self.detail,
+                    "yaw_position": self.yaw_position,
+                    "tilt_position": self.tilt_position,
+                    "forward_position": self.forward_position,
                     "project_name": self.project_name,
                     "subject_id": self.subject_id,
                     "scale": self.scale,
@@ -141,7 +149,7 @@ class CameraManager(Static):
                 # Detail (auto-generated from stepper positions)
                 yield Label("Detail:", classes="field-label")
                 yield Input(
-                    value=self.detail,
+                    value=f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}",
                     id="detail_input",
                     disabled=True
                 )
@@ -256,13 +264,17 @@ class CameraManager(Static):
                 elif "forward" in widget.id.lower():
                     forward_position = widget.value
             
-            self.detail = f"yaw{yaw_position}_tilt{tilt_position}_forward{forward_position}"
+            self.yaw_position = str(yaw_position)
+            self.tilt_position = str(tilt_position)
+            self.forward_position = str(forward_position)
         except (ImportError, AttributeError):
             # If we can't get the actual positions, use defaults
-            self.detail = "yaw0_tilt0_forward0"
+            self.yaw_position = "0"
+            self.tilt_position = "0"
+            self.forward_position = "0"
         
         detail_input = self.query_one("#detail_input", Input)
-        detail_input.value = self.detail
+        detail_input.value = f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}"
     
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events."""
@@ -400,7 +412,7 @@ class CameraManager(Static):
         self.update_detail_field()
         
         # Generate filename with all components
-        filename = f"./results/{self.current_date}_{self.subject}_{self.owner}_{self.detail}.jpg"
+        filename = f"./results/{self.current_date}_{self.subject}_{self.owner}_{f'yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}'}.jpg"
         
         self.status = "Creating empty image..."
         
@@ -549,7 +561,9 @@ class CameraManager(Static):
                 f"Date: {self.current_date}\n"
                 f"Subject: {self.subject}\n"
                 f"Artist: {self.owner}\n"
-                f"Detail: {self.detail}\n"
+                f"Yaw: {self.yaw_position}\n"
+                f"Tilt: {self.tilt_position}\n"
+                f"Forward: {self.forward_position}\n"
                 f"Project: {self.project_name}\n"
                 f"Subject ID: {self.subject_id}\n"
                 f"Scale: {self.scale}\n"
