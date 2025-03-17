@@ -223,9 +223,6 @@ class CameraManager(Static):
             # Update the date field with current timestamp
             self.update_date_field()
             
-            # Update the detail field with current stepper positions
-            self.update_detail_field()
-            
             # Set up a timer to update the date every second
             self._date_timer = self.set_interval(1.0, self.update_date_field)
             
@@ -267,41 +264,6 @@ class CameraManager(Static):
                 
         except Exception as e:
             logger.error(f"Error updating date field: {e}")
-    
-    def update_detail_field(self) -> None:
-        """Update the detail field with current stepper positions."""
-        # This would normally get the actual stepper positions
-        # For now, we'll use placeholder values
-        try:
-            # Try to import the necessary modules to get stepper positions
-
-            
-            # Find all stepper motors in the app
-            app = self.app
-            yaw_position = 0
-            tilt_position = 0
-            forward_position = 0
-            
-            # Try to get the current positions from the app
-            for widget in app.query(CurrentPositionDisplay):
-                if "yaw" in widget.id.lower():
-                    yaw_position = widget.value
-                elif "tilt" in widget.id.lower():
-                    tilt_position = widget.value
-                elif "forward" in widget.id.lower():
-                    forward_position = widget.value
-            
-            self.yaw_position = str(yaw_position)
-            self.tilt_position = str(tilt_position)
-            self.forward_position = str(forward_position)
-        except (ImportError, AttributeError):
-            # If we can't get the actual positions, use defaults
-            self.yaw_position = "0"
-            self.tilt_position = "0"
-            self.forward_position = "0"
-        
-        detail_input = self.query_one("#detail_input", Input)
-        detail_input.value = f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}"
     
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input change events."""
@@ -436,7 +398,6 @@ class CameraManager(Static):
         
         # Update date and detail fields before taking the photo
         self.update_date_field()
-        self.update_detail_field()
         
         # Generate filename with all components
         filename = f"./results/{self.current_date}_{self.subject}_{self.owner}_{f'yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}'}.jpg"

@@ -1,6 +1,6 @@
 {
     "stepper_1": {
-        "usb_id": "00425332",
+        "usb_id": "",
         "current": "0",
         "speed": "0",
         "divisions": "10",
@@ -12,7 +12,7 @@
         "max_speed": "15000.0"
     },
     "stepper_2": {
-        "usb_id": "00425332",
+        "usb_id": "",
         "current": "0",
         "speed": "0",
         "divisions": "18",
@@ -24,7 +24,7 @@
         "max_speed": "1000.0"
     },
     "stepper_3": {
-        "usb_id": "00425332",
+        "usb_id": "",
         "current": "0",
         "speed": "0",
         "divisions": "5",
