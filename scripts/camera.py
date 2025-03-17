@@ -508,47 +508,11 @@ class CameraManager(Static):
                 shutil.copy2(capture_path, final_path)
                 logger.info(f"Photo saved to: {final_path}")
 
-                # Get values from UI
-                self.update_fields_from_ui()
-                
-                # Create image description with metadata
-                image_description = (
-                    f"Date: {self.current_date}\n"
-                    f"Subject: {self.subject}\n"
-                    f"Artist: {self.owner}\n"
-                    f"Detail: {self.detail}\n"
-                    f"Project: {self.project_name}\n"
-                    f"Subject ID: {self.subject_id}\n"
-                    f"Scale: {self.scale}\n"
-                    f"Software: {self.software}\n"
-                    f"Copyright: {self.copyright}\n"
-                    f"Notes: {self.notes}"
-                )
-
-                # Open and apply EXIF data
+                # Add EXIF data to the saved image
                 with Image.open(final_path) as img:
-                    # Create new EXIF data structure
-                    exif = Image.Exif()
+                    if not self.save_image_with_exif(img, final_path):
+                        logger.error("Failed to apply EXIF data to image")
                     
-                    # Add our metadata fields
-                    for tag_id, name in ExifTags.TAGS.items():
-                        if name == 'ImageDescription':
-                            exif[tag_id] = image_description.encode('ascii', 'replace')
-                        elif name == 'Artist':
-                            exif[tag_id] = self.owner.encode('ascii', 'replace')
-                        elif name == 'Copyright' and self.copyright:
-                            exif[tag_id] = self.copyright.encode('ascii', 'replace')
-                        elif name == 'Software':
-                            exif[tag_id] = self.software.encode('ascii', 'replace')
-                    
-                    # Save with updated EXIF
-                    img.save(final_path, 'JPEG', exif=exif, quality=100)
-                    logger.debug("Image saved with updated EXIF data")
-                    
-                # Clean up temporary capture file
-                if os.path.exists(capture_path):
-                    os.remove(capture_path)
-
             except Exception as e:
                 logger.error(f"Error saving photo: {e}")
                 self.state = CameraState.IDLE
@@ -574,8 +538,8 @@ class CameraManager(Static):
     def save_image_with_exif(self, img, filename):
         """Save an image with comprehensive EXIF metadata."""
         try:
-            # Create EXIF data structure
-            exif = Image.Exif()
+            # Get existing EXIF data
+            exif = img.getexif() if hasattr(img, 'getexif') else Image.Exif()
             
             # Update fields from UI
             self.update_fields_from_ui()
@@ -594,26 +558,29 @@ class CameraManager(Static):
                 f"Notes: {self.notes}"
             )
             
-            # Add our metadata fields
-            for tag_id, name in ExifTags.TAGS.items():
-                if name == 'ImageDescription':
-                    exif[tag_id] = image_description.encode('ascii', 'replace')
-                elif name == 'Artist':
-                    exif[tag_id] = self.owner.encode('ascii', 'replace')
-                elif name == 'Copyright' and self.copyright:
-                    exif[tag_id] = self.copyright.encode('ascii', 'replace')
-                elif name == 'Software':
-                    exif[tag_id] = self.software.encode('ascii', 'replace')
-                elif name == 'DateTime':
-                    exif[tag_id] = self.current_date
-                elif name == 'DateTimeOriginal':
-                    exif[tag_id] = self.current_date
-                elif name == 'DateTimeDigitized':
-                    exif[tag_id] = self.current_date
-            
-            # Save the image with EXIF data
+            # Add standard EXIF tags
+            exif[0x010e] = image_description.encode('ascii', 'replace')  # ImageDescription
+            exif[0x013b] = self.owner.encode('ascii', 'replace')  # Artist
+            if self.copyright:
+                exif[0x8298] = self.copyright.encode('ascii', 'replace')  # Copyright
+            exif[0x0131] = self.software.encode('ascii', 'replace')  # Software
+            exif[0x0132] = self.current_date  # DateTime
+            exif[0x9003] = self.current_date  # DateTimeOriginal
+            exif[0x9004] = self.current_date  # DateTimeDigitized
+
+            # First save with EXIF data
             img.save(filename, 'JPEG', exif=exif, quality=100)
-            logger.debug("Image saved with EXIF data")
+            
+            # Now create and save thumbnail separately
+            thumb_filename = filename.replace('.jpg', '_thumb.jpg')
+            thumb = img.copy()
+            thumb.thumbnail((160, 120), Image.LANCZOS)
+            thumb.save(thumb_filename, 'JPEG', quality=85)
+            
+            # Show original image
+            img.show()
+            
+            logger.debug("Image saved with EXIF data and displayed")
             return True
         
         except Exception as e:
