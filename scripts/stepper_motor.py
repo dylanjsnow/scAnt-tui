@@ -1,21 +1,16 @@
-from typing import Optional, Tuple, List
 from textual.widgets import Static, Button, Input, Select, Label
 from textual.reactive import reactive
-from settings import SettingsManager
-from scan import ScanManager
-from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraState, CameraMessage
+from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraMessage
 from ticlib import TicUSB
 from textual import on
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 import re
 from progress_display import ProgressDisplay
 from current_position import CurrentPositionDisplay
 from target_position import TargetPositionDisplay
 from max_position import MaxPositionDisplay
 from min_position import MinPositionDisplay
-from current_limit import CurrentLimitDisplay
 import logging
-from camera import CameraManager
 from multiprocessing import Queue
 
 # Create logger for this module

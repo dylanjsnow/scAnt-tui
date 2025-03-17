@@ -1,26 +1,21 @@
 import os
 import subprocess
-import time
 import asyncio
-from asyncio.subprocess import create_subprocess_exec, PIPE
 from datetime import datetime
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, Grid, ScrollableContainer, Container
 from textual.widgets import Button, Label, Select, Static, Input, TextArea
 from textual.reactive import reactive
 from textual import work
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ExifTags
+from PIL import Image,  ExifTags
 import json
-import re
-from settings import SettingsManager
 from pathlib import Path
 import logging
 from utils import CameraState, CameraMessage
 from multiprocessing import Queue
 import shutil
-from exif import ExifManager
 import gphoto2 as gp
+from current_position import CurrentPositionDisplay
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -42,13 +37,10 @@ class CameraManager(Static):
         self.owner = "User"
         self.detail = "yaw0_tilt0_forward0"
         self._date_timer = None
-        self.exif_display_visible = False
         
         # Store reference to settings manager
         self.settings_manager = settings_manager
         
-        # EXIF display format (True for string, False for binary)
-        self.exif_string_format = True
         
         # Default values for metadata fields
         self.project_name = ""
@@ -57,10 +49,7 @@ class CameraManager(Static):
         self.copyright = ""
         self.notes = ""
         self.software = "MacroScans v1.0"
-        
-        # Initialize EXIF manager
-        self.exif_manager = ExifManager()
-        
+
         # Load settings if available
         self.load_settings()
         
@@ -87,15 +76,6 @@ class CameraManager(Static):
                 self.software = camera_settings.get("software", self.software)
                 self.selected_camera = camera_settings.get("selected_camera", self.selected_camera)
                 
-                # Try to load EXIF data from exif.json if it exists
-                try:
-                    exif_file = Path(__file__).parent / "exif.json"
-                    if exif_file.exists():
-                        with open(exif_file, 'r') as f:
-                            self.exif_data = json.load(f)
-                        logger.debug("Loaded EXIF data from exif.json")
-                except Exception as e:
-                    logger.debug(f"Error loading EXIF data: {e}")
             logger.debug("Loading camera settings")
     
     def save_settings(self) -> None:
@@ -113,9 +93,7 @@ class CameraManager(Static):
                     "copyright": self.copyright,
                     "notes": self.notes,
                     "software": self.software,
-                    "selected_camera": self.selected_camera,
-                    "exif_string_format": True,
-                    "exif_data": self.exif_manager.get_formatted_exif_data()
+                    "selected_camera": self.selected_camera
                 }
                 
                 # Update settings and save
@@ -240,72 +218,7 @@ class CameraManager(Static):
         except Exception as e:
             logger.error(f"Error updating fields from UI: {e}")
     
-    def format_exif_data(self) -> str:
-        """Format EXIF data for display in the TextArea."""
-        # Create a copy of the EXIF data that can be serialized to JSON
-        display_data = {}
-        for key, value in self.exif_data.items():
-            # Convert binary data to hex strings for display
-            if isinstance(value, bytes):
-                display_data[key] = value.hex()
-            # Convert tuples to strings for display
-            elif isinstance(value, tuple):
-                if len(value) == 2:
-                    # Format rational numbers as fractions
-                    display_data[key] = f"{value[0]}/{value[1]}"
-                else:
-                    display_data[key] = str(value)
-            else:
-                display_data[key] = value
-        
-        return json.dumps(display_data, indent=2)
     
-    def update_exif_from_display(self) -> None:
-        """Update EXIF data from the TextArea display."""
-        try:
-            exif_display = self.query_one("#exif_display", TextArea)
-            display_text = exif_display.text
-            
-            # Parse the JSON data
-            display_data = json.loads(display_text)
-            
-            # Update the EXIF data with the parsed values
-            for key, value in display_data.items():
-                if key in self.exif_data:
-                    original_value = self.exif_data[key]
-                    
-                    # Handle different data types
-                    if isinstance(original_value, bytes):
-                        # Convert hex string back to bytes
-                        try:
-                            self.exif_data[key] = bytes.fromhex(value)
-                        except ValueError:
-                            # If conversion fails, keep the original value
-                            pass
-                    elif isinstance(original_value, tuple):
-                        # Convert fraction string back to tuple
-                        if '/' in value:
-                            try:
-                                num, denom = value.split('/')
-                                self.exif_data[key] = (int(num), int(denom))
-                            except ValueError:
-                                # If conversion fails, keep the original value
-                                pass
-                    elif isinstance(original_value, int):
-                        try:
-                            self.exif_data[key] = int(value)
-                        except ValueError:
-                            # If conversion fails, keep the original value
-                            pass
-                    else:
-                        # For strings and other simple types
-                        self.exif_data[key] = value
-            
-            self.status = "EXIF data updated from editor"
-        except json.JSONDecodeError:
-            self.status = "Error: Invalid JSON in EXIF editor"
-        except Exception as e:
-            self.status = f"Error updating EXIF data: {str(e)}"
     
     def update_date_field(self) -> None:
         """Update the date field with current timestamp in EXIF format (YYYY:MM:DD HH:MM:SS)."""
@@ -316,12 +229,7 @@ class CameraManager(Static):
             if date_input:
                 date_input.value = self.current_date
                 
-                # Also update EXIF date fields with same format
-                self.exif_data.update({
-                    'DateTime': self.current_date,
-                    'DateTimeOriginal': self.current_date,
-                    'DateTimeDigitized': self.current_date
-                })
+                
         except Exception as e:
             logger.error(f"Error updating date field: {e}")
     
@@ -331,7 +239,7 @@ class CameraManager(Static):
         # For now, we'll use placeholder values
         try:
             # Try to import the necessary modules to get stepper positions
-            from scripts.current_position import CurrentPositionDisplay
+
             
             # Find all stepper motors in the app
             app = self.app
@@ -397,47 +305,8 @@ class CameraManager(Static):
             logger.debug("Take Photo Button Pressed")
             self.take_photo({'position': 0, 'axis': 'test'})
         elif event.button.id == "update_exif_btn":
-            self.extract_camera_exif()
-    
-    def toggle_exif_format(self):
-        """Toggle between string and binary representation of EXIF data."""
-        self.exif_string_format = not self.exif_string_format
-        
-        # Update the button text
-        toggle_btn = self.query_one("#toggle_exif_format_btn", Button)
-        toggle_btn.label = f"Show {'String' if not self.exif_string_format else 'Binary'} Format"
-        
-        # Display the current EXIF data in the selected format
-        self.display_exif_data()
-    
-    def display_exif_data(self):
-        """Display the current EXIF data in the selected format."""
-        exif_status = self.query_one("#exif_status", Static)
-        
-        # Clear the current display
-        exif_status.update("Current EXIF Data:")
-        
-        # Format and display each EXIF field
-        for tag_name, value in self.exif_data.items():
-            if self.exif_string_format:
-                # String representation
-                if isinstance(value, bytes):
-                    # Convert bytes to a readable hex string
-                    formatted_value = value.hex()
-                    self.update_exif_status(f"{tag_name}: 0x{formatted_value} (bytes)")
-                elif isinstance(value, tuple) and len(value) == 2:
-                    # Format rational numbers
-                    if value[1] == 1:
-                        formatted_value = str(value[0])
-                    else:
-                        formatted_value = f"{value[0]}/{value[1]} ({value[0]/value[1]:.2f})"
-                    self.update_exif_status(f"{tag_name}: {formatted_value}")
-                else:
-                    # Regular string representation
-                    self.update_exif_status(f"{tag_name}: {value}")
-            else:
-                # Binary/raw representation
-                self.update_exif_status(f"{tag_name}: {repr(value)}")
+            logger.debug("Update EXIF Button Pressed")
+            self.update_exif_from_camera()
     
     def get_connected_cameras(self) -> list:
         """Get a list of connected cameras using gphoto2."""
@@ -608,12 +477,12 @@ class CameraManager(Static):
             logger.error(f"Error capturing image: {e}")
             return None
 
+    @work
     async def take_photo(self, metadata=None):
         """Take a photo with the camera and save it with metadata."""
         try:
-            logger.info(f"Taking photo at position {metadata.get('position', 'unknown')} on {metadata.get('axis', 'unknown')} axis")
+            logger.info(f"Taking photo at position {metadata.get('position', 'unknown')} on axis {metadata.get('axis', 'unknown')} axis")
             
-            # Update state to indicate camera is busy
             self.state = CameraState.CAPTURING
             
             # Take the photo using gphoto2
@@ -634,58 +503,63 @@ class CameraManager(Static):
             final_filename = f"{timestamp}_{self.subject}_{position}_{axis}.jpg"
             final_path = os.path.join("./results", final_filename)
             
-            # Move the temporary file to final location
             try:
-                shutil.move(capture_path, final_path)
+                # First copy the captured image to final location
+                shutil.copy2(capture_path, final_path)
                 logger.info(f"Photo saved to: {final_path}")
+
+                # Get values from UI
+                self.update_fields_from_ui()
+                
+                # Create image description with metadata
+                image_description = (
+                    f"Date: {self.current_date}\n"
+                    f"Subject: {self.subject}\n"
+                    f"Artist: {self.owner}\n"
+                    f"Detail: {self.detail}\n"
+                    f"Project: {self.project_name}\n"
+                    f"Subject ID: {self.subject_id}\n"
+                    f"Scale: {self.scale}\n"
+                    f"Software: {self.software}\n"
+                    f"Copyright: {self.copyright}\n"
+                    f"Notes: {self.notes}"
+                )
+
+                # Open and apply EXIF data
+                with Image.open(final_path) as img:
+                    # Create new EXIF data structure
+                    exif = Image.Exif()
+                    
+                    # Add our metadata fields
+                    for tag_id, name in ExifTags.TAGS.items():
+                        if name == 'ImageDescription':
+                            exif[tag_id] = image_description.encode('ascii', 'replace')
+                        elif name == 'Artist':
+                            exif[tag_id] = self.owner.encode('ascii', 'replace')
+                        elif name == 'Copyright' and self.copyright:
+                            exif[tag_id] = self.copyright.encode('ascii', 'replace')
+                        elif name == 'Software':
+                            exif[tag_id] = self.software.encode('ascii', 'replace')
+                    
+                    # Save with updated EXIF
+                    img.save(final_path, 'JPEG', exif=exif, quality=100)
+                    logger.debug("Image saved with updated EXIF data")
+                    
+                # Clean up temporary capture file
+                if os.path.exists(capture_path):
+                    os.remove(capture_path)
+
             except Exception as e:
                 logger.error(f"Error saving photo: {e}")
                 self.state = CameraState.IDLE
                 return False
 
-            # Reset state to idle after successful capture
             self.state = CameraState.IDLE
             return True
 
         except Exception as e:
             logger.error(f"Error taking photo: {str(e)}")
             self.state = CameraState.IDLE
-            return False
-
-    async def update_exif_from_camera(self):
-        """Update EXIF data from camera - only called when explicitly requested."""
-        try:
-            logger.debug(f"\nUpdating EXIF data for camera: {self.selected_camera}")
-            
-            # Get current values from UI
-            self.update_fields_from_ui()
-            
-            # Get EXIF data from camera
-            camera_exif = await self.exif_manager.get_camera_exif(self.selected_camera)
-            
-            # Update EXIF data with UI values and camera data
-            self.exif_manager.update_exif_data({
-                'date': self.current_date,
-                'subject': self.subject,
-                'artist': self.owner,
-                'detail': self.detail,
-                'project_name': self.project_name,
-                'subject_id': self.subject_id,
-                'scale': self.scale,
-                'software': self.software,
-                'copyright': self.copyright,
-                'notes': self.notes,
-                'model': self.selected_camera,
-                **camera_exif  # Include any additional EXIF data from camera
-            })
-            
-            # Save settings
-            self.save_settings()
-            
-            return True
-
-        except Exception as e:
-            logger.error(f"Error updating EXIF data: {str(e)}")
             return False
 
     def on_unmount(self) -> None:
@@ -703,49 +577,45 @@ class CameraManager(Static):
             # Create EXIF data structure
             exif = Image.Exif()
             
-            # Update software field from UI
+            # Update fields from UI
             self.update_fields_from_ui()
-            self.exif_data['Software'] = self.software
             
-            # Add all EXIF data from our dictionary
-            for tag_name, value in self.exif_data.items():
-                # Find the numeric tag ID for the string tag name
-                for tag_id, name in ExifTags.TAGS.items():
-                    if name == tag_name:
-                        exif[tag_id] = value
-                        break
+            # Create image description with metadata
+            image_description = (
+                f"Date: {self.current_date}\n"
+                f"Subject: {self.subject}\n"
+                f"Artist: {self.owner}\n"
+                f"Detail: {self.detail}\n"
+                f"Project: {self.project_name}\n"
+                f"Subject ID: {self.subject_id}\n"
+                f"Scale: {self.scale}\n"
+                f"Software: {self.software}\n"
+                f"Copyright: {self.copyright}\n"
+                f"Notes: {self.notes}"
+            )
             
-            # Add user metadata as UserComment
-            user_comment = f"Detail: {self.detail}"
-            if self.project_name:
-                user_comment += f"\nProject: {self.project_name}"
-            if self.subject_id:
-                user_comment += f"\nSubject ID: {self.subject_id}"
-            if self.scale:
-                user_comment += f"\nScale: {self.scale}"
-            if self.notes:
-                user_comment += f"\nNotes: {self.notes}"
-            
-            # EXIF UserComment must be encoded with specific header
-            encoded_comment = b'ASCII\0\0\0' + user_comment.encode('ascii', 'replace')
-            
-            # Find UserComment tag ID
+            # Add our metadata fields
             for tag_id, name in ExifTags.TAGS.items():
-                if name == 'UserComment':
-                    exif[tag_id] = encoded_comment
-                    break
-            
-            # Add artist and copyright
-            for tag_id, name in ExifTags.TAGS.items():
-                if name == 'Artist':
-                    exif[tag_id] = self.owner
+                if name == 'ImageDescription':
+                    exif[tag_id] = image_description.encode('ascii', 'replace')
+                elif name == 'Artist':
+                    exif[tag_id] = self.owner.encode('ascii', 'replace')
                 elif name == 'Copyright' and self.copyright:
-                    exif[tag_id] = self.copyright
+                    exif[tag_id] = self.copyright.encode('ascii', 'replace')
+                elif name == 'Software':
+                    exif[tag_id] = self.software.encode('ascii', 'replace')
+                elif name == 'DateTime':
+                    exif[tag_id] = self.current_date
+                elif name == 'DateTimeOriginal':
+                    exif[tag_id] = self.current_date
+                elif name == 'DateTimeDigitized':
+                    exif[tag_id] = self.current_date
             
             # Save the image with EXIF data
-            img.save(filename, exif=exif)
+            img.save(filename, 'JPEG', exif=exif, quality=100)
             logger.debug("Image saved with EXIF data")
             return True
+        
         except Exception as e:
             logger.error(f"Error saving image with EXIF data: {e}")
             return False
