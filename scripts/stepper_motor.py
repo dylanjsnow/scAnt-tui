@@ -13,6 +13,7 @@ from min_position import MinPositionDisplay
 import logging
 from multiprocessing import Queue
 import asyncio
+import queue
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
@@ -109,7 +110,7 @@ class StepperMotor(Static):
         self.query_one(MinPositionDisplay).min_position = self.min_position
         self.moving = False
 
-    async def on_mount(self) -> None:
+    def on_mount(self) -> None:
         """Event handler called when widget is added to the app"""
         logger.debug(f"Starting on_mount for {self.id}")
         
@@ -155,16 +156,26 @@ class StepperMotor(Static):
             logger.debug(f"  Min Position: {self.min_position}")
             logger.debug(f"  Max Position: {self.max_position}")
             
-            # Wait a brief moment to ensure widgets are mounted
-            await asyncio.sleep(0.1)
-            
-            # Now update the UI widgets with the loaded values
+            # Update the UI widgets with the loaded values
             self.update_widget_values()
             
-            # Set up intervals
-            self.set_interval(1 / 10.0, self.watch_current_position)
-            self.set_interval(1 / 10.0, self.watch_target_position)
+            # Set up intervals with non-async functions
+            self.set_interval(0.1, self.watch_current_position)
+            self.set_interval(0.1, self.watch_target_position)
             self.set_interval(0.1, self.update_scan_state)
+            
+            # Enable/disable buttons based on initial state
+            power_button = self.query_one("#power_stepper", Button)
+            power_button.disabled = False  # On button should always be enabled
+            
+            energize_button = self.query_one("#energize_stepper", Button)
+            energize_button.disabled = not self.initialized
+            
+            zero_button = self.query_one("#zero_stepper", Button)
+            zero_button.disabled = not (self.initialized and self.energized)
+            
+            run_button = self.query_one("#run_stepper", Button)
+            run_button.disabled = not self.validate_scan_parameters()
             
             logger.info(f"Successfully loaded settings for {self.id}")
             
@@ -197,31 +208,32 @@ class StepperMotor(Static):
         except Exception as e:
             logger.error(f"Error updating widget values: {e}")
 
-    async def watch_current_position(self):
+    def watch_current_position(self) -> None:
         """Watch for changes in current position."""
-        while True:
-            try:
-                if hasattr(self, 'tic') and self.tic and self.energized:
-                    # Get current position from motor
-                    self.current_position = self.tic.get_current_position()
-                    self.query_one(CurrentPositionDisplay).current_position = self.current_position
-                    self.moving = self.tic.get_current_position() != self.tic.get_target_position()
-                    
-                    if self.moving:
-                        logger.debug(f"{self.id} current position: {self.current_position}")
-                        logger.debug(f"{self.id} target position: {self.target_position}")
-
-                        # Send position update to camera manager
-                        self.position_queue.put({
-                            'axis': self.axis,  # 'Yaw', 'Tilt', or 'Forward'
-                            'position': self.current_position
-                        })
-                    
-                await asyncio.sleep(0.1)
+        try:
+            if hasattr(self, 'tic') and self.tic and self.energized:
+                # Get current position from motor
+                self.current_position = self.tic.get_current_position()
+                self.query_one(CurrentPositionDisplay).current_position = self.current_position
+                self.moving = self.tic.get_current_position() != self.tic.get_target_position()
                 
-            except Exception as e:
-                logger.error(f"Error watching current position: {e}")
-                await asyncio.sleep(1)
+                if self.moving:
+                    logger.debug(f"{self.id} current position: {self.current_position}")
+                    logger.debug(f"{self.id} target position: {self.target_position}")
+                    
+                    # Update position in a simpler way - no queue
+                    if self.position_queue:
+                        try:
+                            # Use put_nowait to avoid blocking
+                            self.position_queue.put_nowait({
+                                'axis': self.axis,
+                                'position': self.current_position
+                            })
+                        except Exception as e:
+                            logger.warning(f"Error updating position: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error watching current position: {e}")
 
     def watch_target_position(self) -> None:
         """Watch for target position changes and update motor"""
@@ -298,20 +310,44 @@ class StepperMotor(Static):
         logger.info(f"{self.id} zeroed - Current position: {self.current_position}, Target position: {self.target_position}")
 
     def update_initialized(self, event: Button.Pressed) -> None:
-        """Handle power button press"""
-        self.initialized = not self.initialized
-        if self.initialized:
-            self.add_class("initialized")
-            self.tic = TicUSB(serial_number=self.serial_number)
-        else:
-            # If turning off, ensure motor is deenergized
-            if self.energized:
-                self.update_energized(event)
-            self.remove_class("initialized")
-            self.remove_class("energized")
-            self.tic = None
-            
-        self.update_control_states()
+        """Update the initialized state of the stepper motor"""
+        try:
+            logger.debug(f"Updating initialized state for {self.id}")
+            if not self.initialized:
+                logger.debug(f"Attempting to initialize motor with serial {self.serial_number}")
+                # Try to connect to the motor
+                self.tic = TicUSB(serial_number=self.serial_number)
+                self.initialized = True
+                event.button.label = "Off"
+                event.button.variant = "error"
+                
+                # Enable the energize button
+                energize_button = self.query_one("#energize_stepper")
+                energize_button.disabled = False
+                
+                logger.info(f"Successfully initialized motor {self.id}")
+            else:
+                logger.debug("De-initializing motor")
+                # Disconnect from motor
+                if self.tic:
+                    self.tic = None
+                self.initialized = False
+                event.button.label = "On"
+                event.button.variant = "default"
+                
+                # Disable other buttons
+                energize_button = self.query_one("#energize_stepper")
+                energize_button.disabled = True
+                
+                zero_button = self.query_one("#zero_stepper")
+                zero_button.disabled = True
+                
+                run_button = self.query_one("#run_stepper")
+                run_button.disabled = True
+                
+                logger.info(f"De-initialized motor {self.id}")
+        except Exception as e:
+            logger.error(f"Error updating initialized state: {e}")
 
     def update_energized(self, event: Button.Pressed) -> None:
         """Handle energize button press"""
@@ -435,41 +471,43 @@ class StepperMotor(Static):
         """Handle a button press"""
         logger.debug(f"{self.id} button pressed: {event.button.id}")
         
-        if event.button.id == "power_stepper":
-            self.update_initialized(event)
-        elif event.button.id == "energize_stepper":
-            self.update_energized(event)
-        elif event.button.id == "zero_stepper":
-            self.zero_stepper()
-        elif event.button.id == "run_stepper":
-            if self.scan_state == ScanState.IDLE:
-                self.start_scan()
-            else:
-                self.stop_scan()
-            
+        try:
+            if event.button.id == "power_stepper":
+                logger.debug("Power button pressed, attempting to initialize motor")
+                self.update_initialized(event)
+            elif event.button.id == "energize_stepper":
+                logger.debug("Energize button pressed")
+                self.update_energized(event)
+            elif event.button.id == "zero_stepper":
+                logger.debug("Zero button pressed")
+                self.zero_stepper()
+            elif event.button.id == "run_stepper":
+                logger.debug("Run button pressed")
+                if self.scan_state == ScanState.IDLE:
+                    self.start_scan()
+                else:
+                    self.stop_scan()
+        except Exception as e:
+            logger.error(f"Error handling button press: {e}")
+
     @on(Input.Changed)
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle an input change"""
-        stepper_num = self.stepper_num  # Use instance variable instead of parsing ID
-        
         if event.input.id == "divisions_stepper":
             self.divisions = event.value
-            logger.debug(f"Saving divisions for stepper_{stepper_num}: {event.value}")
-            self.settings_manager.queue_save(stepper_num, "divisions", event.value)
+            logger.debug(f"Setting divisions for stepper_{self.stepper_num}: {event.value}")
             
         elif event.input.id == "min_position_stepper":
             numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
             value = numbers[0] if numbers else ""
             self.min_position = value
-            logger.debug(f"Saving min_position for stepper_{stepper_num}: {value}")
-            self.settings_manager.queue_save(stepper_num, "min_position", value)
+            logger.debug(f"Setting min_position for stepper_{self.stepper_num}: {value}")
             
         elif event.input.id == "max_position_stepper":
             numbers = re.findall(r"[-+]?(?:\d*\.*\d+)", event.value)
             value = numbers[0] if numbers else ""
             self.max_position = value
-            logger.debug(f"Saving max_position for stepper_{stepper_num}: {value}")
-            self.settings_manager.queue_save(stepper_num, "max_position", value)
+            logger.debug(f"Setting max_position for stepper_{self.stepper_num}: {value}")
         
         elif event.input.id == "max_speed_stepper":
             try:
@@ -493,9 +531,9 @@ class StepperMotor(Static):
                     self.tic.set_max_speed(speed_steps)
                     self.tic.exit_safe_start()
                 
-                # Update display and save setting
+                # Update display
                 self.max_speed = speed
-                self.settings_manager.queue_save(stepper_num, "max_speed", str(speed))
+                logger.debug(f"Setting max_speed for stepper_{self.stepper_num}: {speed}")
                 
             except (ValueError, TypeError):
                 # Invalid input - reset to previous value
@@ -511,7 +549,6 @@ class StepperMotor(Static):
         if event.select.id == "axis_stepper":
             self.axis = event.value
             logger.debug(f"{self.id} axis: {self.axis}")
-            self.settings_manager.queue_save(self.id.split("_")[-1], "axis", event.value)
             
             # Update the title to match the selected axis
             title_label = self.query_one(f"#{self.id}_title", Label)
@@ -520,14 +557,12 @@ class StepperMotor(Static):
         elif event.select.id == "serial_stepper":
             self.serial_number = event.value
             logger.debug(f"{self.id} serial number: {self.serial_number}")
-            self.settings_manager.queue_save(self.id.split("_")[-1], "serial", event.value)
             
         elif event.select.id == "current_limit_stepper":
             self.current_limit = event.value
             # Get the mA value from the options tuple for display
             current_ma = next(opt[0] for opt in self.current_limit_options if opt[1] == event.value)
             logger.debug(f"{self.id} current limit set to: {current_ma}")
-            self.settings_manager.queue_save(self.id.split("_")[-1], "current_limit", event.value)
             
             # Update the motor if it's connected
             if self.tic:
@@ -799,34 +834,41 @@ class StepperMotor(Static):
 
     def on_unmount(self) -> None:
         """Clean up when widget is removed"""
-        # Log current settings before saving
-        logger.debug(f"Saving settings for stepper_{self.stepper_num}:")
-        logger.debug(f"  Axis: {self.axis}")
-        logger.debug(f"  Serial: {self.serial_number}")
-        logger.debug(f"  Current Limit: {self.current_limit}")
-        logger.debug(f"  Max Speed: {self.max_speed}")
-        logger.debug(f"  Divisions: {self.divisions}")
-        logger.debug(f"  Min Position: {self.min_position}")
-        logger.debug(f"  Max Position: {self.max_position}")
-        
-        # Stop any active timer
-        if self._wait_timer:
-            self._wait_timer.stop()
-            self._wait_timer = None
+        try:
+            # Stop all intervals
+            self.set_interval(0.1, self.watch_current_position, pause=True)
+            self.set_interval(0.1, self.watch_target_position, pause=True)
+            self.set_interval(0.1, self.update_scan_state, pause=True)
+            
+            # Stop any active timer
+            if self._wait_timer:
+                self._wait_timer.stop()
+                self._wait_timer = None
+            
+            # Ensure motor is deenergized
+            if self.tic:
+                try:
+                    self.tic.deenergize()
+                    self.tic = None
+                except:
+                    pass
 
-        # Save settings
-        if self.settings_manager:
-            stepper_key = f"stepper_{self.stepper_num}"
-            settings = {
-                "axis": self.axis,
-                "serial": self.serial_number,
-                "current_limit": self.current_limit,
-                "max_speed": self.max_speed,
-                "divisions": self.divisions,
-                "min_position": self.min_position,
-                "max_position": self.max_position
-            }
-            self.settings_manager.settings[stepper_key] = settings
+            # Save settings before unmounting
+            if self.settings_manager:
+                stepper_key = f"stepper_{self.stepper_num}"
+                settings = {
+                    "axis": self.axis,
+                    "serial": self.serial_number,
+                    "current_limit": self.current_limit,
+                    "max_speed": self.max_speed,
+                    "divisions": self.divisions,
+                    "min_position": self.min_position,
+                    "max_position": self.max_position
+                }
+                self.settings_manager.settings[stepper_key] = settings
+            
+        except Exception as e:
+            logger.error(f"Error during unmount cleanup: {e}")
 
     def get_available_ports(self) -> list[str]:
         """Get list of available USB ports for Tic devices"""

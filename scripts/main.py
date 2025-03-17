@@ -8,6 +8,7 @@ from utils import ScanState
 from settings import SettingsManager
 from scan import ScanManager
 from multiprocessing import Queue
+import queue
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -101,15 +102,28 @@ class ScannerApp(App):
             logger.error(f"Error handling button press: {e}")
 
     def on_mount(self) -> None:
-        """Handle app mount event"""
+        """Handle app mount event."""
         logger.info("App mounted")
-        
-    def on_unmount(self) -> None:
-        """Clean up when app closes"""
+
+    async def on_unmount(self) -> None:
+        """Clean up when app unmounts."""
+        logger.info("App unmounting, cleaning up...")
         try:
-            # Save settings
-            self.settings_manager.save_all()
-            logger.info("App cleanup complete")
+            # Save settings first
+            if self.settings_manager:
+                self.settings_manager.save_all()
+            
+            # Then close the queue
+            if hasattr(self, 'position_queue'):
+                # Drain the queue first
+                while not self.position_queue.empty():
+                    try:
+                        self.position_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                self.position_queue.close()
+                self.position_queue.join_thread()
+            
         except Exception as e:
             logger.error(f"Error during app cleanup: {e}")
 

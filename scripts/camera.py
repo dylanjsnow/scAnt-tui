@@ -628,36 +628,72 @@ class CameraManager(Static):
                         elif message['axis'] == 'Forward':
                             self.forward_position = position
                             
-                        # Update the detail input display
-                        detail_input = self.query_one("#detail_input", Input)
-                        if detail_input:
-                            detail_input.value = f"yaw{self.yaw_position}_tilt{self.tilt_position}_forward{self.forward_position}"
-                            
                         logger.debug(f"Updated {message['axis']} position to {position}")
+                        self.update_position_widgets()
                 
         except Exception as e:
             logger.error(f"Error checking position queue: {e}")
 
-    def _handle_position_updates(self):
-        """Process that handles position updates from the queue."""
-        while True:
-            try:
-                # This will block until a message is available
-                message = self.position_queue.get()
-                
-                if isinstance(message, dict):
-                    if 'axis' in message and 'position' in message:
-                        position = str(message['position'])
+    def _handle_position_updates(self) -> None:
+        """Check for position updates from the queue"""
+        try:
+            if not hasattr(self, 'position_queue') or self.position_queue is None:
+                return
+            
+            # Check if there are any position updates in the queue
+            if not self.position_queue.empty():
+                try:
+                    # Get the update from the queue
+                    update = self.position_queue.get_nowait()
+                    
+                    # Handle different types of updates
+                    if isinstance(update, dict) and 'axis' in update and 'position' in update:
+                        # Position update
+                        axis = update['axis']
+                        position = update['position']
                         
-                        # Update positions based on axis
-                        if message['axis'] == 'Yaw':
-                            self.yaw_position = position
-                        elif message['axis'] == 'Tilt':
-                            self.tilt_position = position
-                        elif message['axis'] == 'Forward':
+                        # Update the appropriate position
+                        if axis == "Forward":
                             self.forward_position = position
+                            logger.debug(f"Updated Forward position to {position}")
+                        elif axis == "Yaw":
+                            self.yaw_position = position
+                            logger.debug(f"Updated Yaw position to {position}")
+                        elif axis == "Tilt":
+                            self.tilt_position = position
+                            logger.debug(f"Updated Tilt position to {position}")
                         
-                        logger.debug(f"Updated {message['axis']} position to {position}")
+                        # Update the UI widgets
+                        self.update_position_widgets()
                         
-            except Exception as e:
-                logger.error(f"Error handling position update: {e}")
+                    elif isinstance(update, tuple) and len(update) == 2:
+                        # Message tuple (type, data)
+                        message_type, message_data = update
+                        
+                        # Handle different message types
+                        if message_type == CameraMessage.TAKE_PHOTO:
+                            # Take a photo
+                            self.take_photo()
+                            
+                except queue.Empty:
+                    # Queue was empty, that's fine
+                    pass
+                
+        except Exception as e:
+            logger.error(f"Error checking position queue: {e}")
+
+    def update_position_widgets(self) -> None:
+        """Update the position widgets with current values"""
+        try:
+            # Update the position input fields - use the correct IDs
+            forward_input = self.query_one("#forward_position", Input)
+            yaw_input = self.query_one("#yaw_position", Input)
+            tilt_input = self.query_one("#tilt_position", Input)
+            
+            # Set the values
+            forward_input.value = str(self.forward_position)
+            yaw_input.value = str(self.yaw_position)
+            tilt_input.value = str(self.tilt_position)
+            
+        except Exception as e:
+            logger.error(f"Error updating position widgets: {e}")
