@@ -635,10 +635,10 @@ class CameraManager(Static):
             img.save(filename, 'JPEG', exif=exif, quality=100)
             
             # Now create and save thumbnail separately
-            thumb_filename = filename.replace('.jpg', '_thumb.jpg')
-            thumb = img.copy()
-            thumb.thumbnail((160, 120), Image.LANCZOS)
-            thumb.save(thumb_filename, 'JPEG', quality=85)
+            # thumb_filename = filename.replace('.jpg', '_thumb.jpg')
+            # thumb = img.copy()
+            # thumb.thumbnail((160, 120), Image.LANCZOS)
+            # thumb.save(thumb_filename, 'JPEG', quality=85)
             
             # Show original image
             img.show()

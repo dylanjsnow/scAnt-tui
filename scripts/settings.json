@@ -27,17 +27,17 @@
         "max_position": "12000"
     },
     "camera": {
-        "subject": "Scan",
-        "owner": "User",
+        "subject": "test-subject",
+        "owner": "dylan",
         "yaw_position": "0",
         "tilt_position": "0",
         "forward_position": "9995",
-        "project_name": "a",
-        "subject_id": "b",
-        "scale": "c",
-        "copyright": "d",
-        "notes": "e",
-        "software": "MacroScans v1.0",
+        "project_name": "test-project",
+        "subject_id": "1",
+        "scale": "1:1",
+        "copyright": "MacroScans LLC",
+        "notes": "test-notes",
+        "software": "MacroScans v0.1",
         "selected_camera": "Canon EOS R"
     }
 }
