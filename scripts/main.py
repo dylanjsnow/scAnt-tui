@@ -37,8 +37,9 @@ class ScannerApp(App):
         logger.info("Initializing ScannerApp")
         try:
             self.settings_manager = SettingsManager("settings.json")
-            self.position_queue = Queue()  # Renamed from camera_queue
-            logger.info("Initialized position queue")
+            self.position_queue = Queue()
+            self.camera_photo_queue = Queue()  # New queue for photo requests
+            logger.info("Initialized position and camera photo queues")
             logger.info("Settings manager initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize settings manager: {e}")
@@ -56,6 +57,7 @@ class ScannerApp(App):
                 logger.info("Creating camera manager")
                 yield CameraManager(
                     position_queue=self.position_queue,
+                    camera_photo_queue=self.camera_photo_queue,  # Pass the new queue
                     settings_manager=self.settings_manager
                 )
                 
@@ -66,6 +68,7 @@ class ScannerApp(App):
                         yield StepperMotor(
                             settings_manager=self.settings_manager,
                             position_queue=self.position_queue,
+                            camera_photo_queue=self.camera_photo_queue,  # Pass the new queue
                             stepper_num=i+1
                         )
             

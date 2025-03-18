@@ -42,13 +42,15 @@ class StepperMotor(Static):
     max_speed = reactive(0)  # Add this with other reactive properties
     position_queue = reactive(None)  # Added for position queue
     stepper_num = reactive(1)  # Added for stepper number
+    camera_photo_queue = reactive(None)  # Added for camera photo queue
     
-    def __init__(self, settings_manager, position_queue: Queue, stepper_num: int = 1, *args, **kwargs):
+    def __init__(self, settings_manager, position_queue: Queue, camera_photo_queue: Queue, stepper_num: int = 1, *args, **kwargs):
         """Initialize stepper motor with settings manager."""
         super().__init__(*args, **kwargs)
         
         self.settings_manager = settings_manager
         self.position_queue = position_queue
+        self.camera_photo_queue = camera_photo_queue
         self.stepper_num = stepper_num
         
         # Initialize with empty lists if no devices found
@@ -676,14 +678,15 @@ class StepperMotor(Static):
                     logger.debug(f"Motor {self.id} reached target, entering wait state")
                     
                     # If this is the forward axis motor (stepper_1), request photo
-                    if self.stepper_num == "1":  # Forward axis
+                    if self.stepper_num == 1:  # Forward axis
                         try:
-                            # Send message to camera process
-                            message = (CameraMessage.TAKE_PHOTO, {
+                            # Send message to camera photo queue instead of position queue
+                            message = {
+                                'message_type': CameraMessage.TAKE_PHOTO,
                                 'position': self.current_position,
                                 'axis': self.axis
-                            })
-                            self.position_queue.put(message)
+                            }
+                            self.camera_photo_queue.put(message)
                             logger.info(f"Requested photo at position {self.current_position}")
                         except Exception as e:
                             logger.error(f"Failed to request photo: {e}")

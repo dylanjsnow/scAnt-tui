@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, Grid, ScrollableContainer, Container
 from textual.widgets import Button, Label, Select, Static, Input, TextArea
 from textual.reactive import reactive
-from textual import work
+from textual import on, work
 from PIL import Image,  ExifTags
 import json
 from pathlib import Path
@@ -28,7 +28,7 @@ class CameraManager(Static):
     
     status = reactive("Ready")
     
-    def __init__(self, position_queue: Queue, settings_manager=None, id: str = "camera_manager"):
+    def __init__(self, position_queue: Queue, camera_photo_queue: Queue = None, settings_manager=None, id: str = "camera_manager"):
         """Initialize the camera manager."""
         super().__init__(id=id)
         
@@ -50,11 +50,18 @@ class CameraManager(Static):
         
         # Queue for receiving position updates from stepper motors
         self.position_queue = position_queue
+        
+        # Use provided camera_photo_queue or create a new one
+        self.camera_photo_queue = camera_photo_queue
         self.state = CameraState.IDLE
         
         # Start position update process
         self.position_process = Process(target=self._handle_position_updates, daemon=True)
         self.position_process.start()
+        
+        # Start photo request process
+        self.photo_process = Process(target=self._handle_photo_requests, daemon=True)
+        self.photo_process.start()
         
         # Default values for metadata fields
         self.project_name = ""
@@ -526,12 +533,61 @@ class CameraManager(Static):
             self.state = CameraState.IDLE
             return False
 
+    def take_photo_sync(self, metadata=None):
+        """Non-async version of take_photo that can be called from a separate process."""
+        try:
+            logger.info(f"Taking photo synchronously with metadata: {metadata}")
+            
+            # Initialize camera
+            camera = gp.Camera()
+            camera.init()
+            
+            logger.debug("Capturing image with gphoto2...")
+            
+            # Capture the image
+            file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
+            logger.debug(f'Camera file path: {file_path.folder}/{file_path.name}')
+            
+            # Define target path in results directory
+            os.makedirs("./results", exist_ok=True)
+            
+            # Generate final filename with timestamp and metadata
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            position = metadata.get('position', '0') if metadata else '0'
+            axis = metadata.get('axis', 'test') if metadata else 'test'
+            final_filename = f"{timestamp}_{self.subject}_{position}_{axis}.jpg"
+            final_path = os.path.join("./results", final_filename)
+            
+            # Copy image from camera to computer
+            logger.debug(f'Copying image to: {final_path}')
+            camera_file = camera.file_get(
+                file_path.folder, 
+                file_path.name, 
+                gp.GP_FILE_TYPE_NORMAL
+            )
+            camera_file.save(final_path)
+            
+            # Clean up
+            camera.exit()
+            
+            logger.info(f"Photo saved to: {final_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error taking photo synchronously: {e}")
+            return False
+
     def on_unmount(self) -> None:
         """Handle unmount event."""
         # Terminate the position update process
         if hasattr(self, 'position_process'):
             self.position_process.terminate()
             self.position_process.join()
+        
+        # Terminate the photo request process
+        if hasattr(self, 'photo_process'):
+            self.photo_process.terminate()
+            self.photo_process.join()
         
         # Stop the date timer
         if self._date_timer:
@@ -666,14 +722,14 @@ class CameraManager(Static):
                         # Update the UI widgets
                         self.update_position_widgets()
                         
-                    elif isinstance(update, tuple) and len(update) == 2:
-                        # Message tuple (type, data)
-                        message_type, message_data = update
+                    # elif isinstance(update, tuple) and len(update) == 2:
+                    #     # Message tuple (type, data)
+                    #     message_type, message_data = update
                         
-                        # Handle different message types
-                        if message_type == CameraMessage.TAKE_PHOTO:
-                            # Take a photo
-                            self.take_photo()
+                    #     # Handle different message types
+                    #     if message_type == CameraMessage.TAKE_PHOTO:
+                    #         # Take a photo
+                    #         self.take_photo()
                             
                 except queue.Empty:
                     # Queue was empty, that's fine
@@ -697,3 +753,47 @@ class CameraManager(Static):
             
         except Exception as e:
             logger.error(f"Error updating position widgets: {e}")
+
+    def _handle_photo_requests(self):
+        """Process that handles photo requests from the queue"""
+        while True:
+            try:
+                # This will block until a message is available
+                message = self.camera_photo_queue.get()
+                
+                if isinstance(message, dict):
+                    # Print out the contents of the message
+                    logger.info(f"Received photo request: {message}")
+                    
+                    # Extract message data
+                    position = message.get('position', 'unknown')
+                    axis = message.get('axis', 'unknown')
+                    
+                    logger.info(f"Photo requested at position {position} on {axis} axis")
+                    
+                    # Call the synchronous version of take_photo
+                    success = self.take_photo_sync(message)
+                    if success:
+                        logger.info(f"Successfully took photo at position {position}")
+                    else:
+                        logger.error(f"Failed to take photo at position {position}")
+                
+            except Exception as e:
+                logger.error(f"Error handling photo request: {e}")
+
+    @on(Button.Pressed, "#take_photo_btn")
+    def on_take_photo_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle take photo button press."""
+        try:
+            logger.info("Take photo button pressed")
+            
+            # Instead of directly calling take_photo, add a command to the queue
+            self.photo_command_queue.put({
+                'command': 'take_photo',
+                'position': f"{self.forward_position}",
+                'axis': 'Manual'
+            })
+            logger.info("Added manual photo command to queue")
+            
+        except Exception as e:
+            logger.error(f"Error handling take photo button: {e}")
