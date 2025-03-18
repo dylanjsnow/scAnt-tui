@@ -641,6 +641,7 @@ class StepperMotor(Static):
             type="integer"
         )
         yield Static()
+        # yield ProgressDisplay()
         
         # Add spacers to fill the grid properly
         for _ in range(4):  # Add 4 spacers to fill the last row of the 4x5 grid

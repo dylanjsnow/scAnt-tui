@@ -145,8 +145,9 @@ class CameraManager(Static):
                 yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
             
             # File naming grid
-            with Container(id="file_naming_grid"):
-                # Date (auto-generated, read-only)
+            # with Container(id="file_naming_grid"):
+            # Date (auto-generated, read-only)
+            with Horizontal():
                 yield Label("Date:", classes="field-label")
                 yield Input(
                     value=self.current_date,
@@ -154,7 +155,8 @@ class CameraManager(Static):
                     disabled=True
                 )
 
-                # Detail (auto-generated from stepper positions)
+            # Detail (auto-generated from stepper positions)
+            with Horizontal():
                 yield Label("Forward:", classes="field-label")
                 yield Input(
                     value=f"{self.forward_position}",
@@ -162,7 +164,8 @@ class CameraManager(Static):
                     disabled=True
                 )
 
-                # Detail (auto-generated from stepper positions)
+            # Detail (auto-generated from stepper positions)
+            with Horizontal():
                 yield Label("Yaw:", classes="field-label")
                 yield Input(
                     value=f"{self.yaw_position}",
@@ -170,37 +173,45 @@ class CameraManager(Static):
                     disabled=True
                 )
 
-                # Detail (auto-generated from stepper positions)
+            # Detail (auto-generated from stepper positions)
+            with Horizontal():
                 yield Label("Tilt:", classes="field-label")
                 yield Input(
                     value=f"{self.tilt_position}",
                     id="tilt_position",
                     disabled=True
                 )
-                
+            
+            with Horizontal():
                 yield Label("Subject:", classes="field-label")
                 yield Input(id="subject_input", value=self.subject)
-                
+            
+            with Horizontal():
                 yield Label("Artist:", classes="field-label")
                 yield Input(id="owner_input", value=self.owner)
                 
-                
-                
+            
+            with Horizontal():
                 yield Label("Project:", classes="field-label")
                 yield Input(id="project_input", value=self.project_name)
                 
+            with Horizontal():
                 yield Label("Subject ID:", classes="field-label")
                 yield Input(id="subject_id_input", value=self.subject_id)
                 
+            with Horizontal():
                 yield Label("Scale:", classes="field-label")
                 yield Input(id="scale_input", value=self.scale)
                 
+            with Horizontal():
                 yield Label("Software:", classes="field-label")
                 yield Input(id="software_input", value=self.software)
                 
+            with Horizontal():
                 yield Label("Copyright:", classes="field-label")
                 yield Input(id="copyright_input", value=self.copyright)
                 
+            with Horizontal():
                 yield Label("Notes:", classes="field-label")
                 yield Input(id="notes_input", value=self.notes)
 
@@ -312,9 +323,9 @@ class CameraManager(Static):
         if event.button.id == "take_photo_btn":
             logger.debug("Take Photo Button Pressed")
             self.take_photo({'position': 0, 'axis': 'test'})
-        elif event.button.id == "update_exif_btn":
-            logger.debug("Update EXIF Button Pressed")
-            self.update_exif_from_camera()
+        # elif event.button.id == "update_exif_btn":
+        #     logger.debug("Update EXIF Button Pressed")
+        #     self.update_exif_from_camera()
     
     def get_connected_cameras(self) -> list:
         """Get a list of connected cameras using gphoto2."""
