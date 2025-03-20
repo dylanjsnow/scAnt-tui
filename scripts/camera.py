@@ -142,7 +142,7 @@ class CameraManager(Static):
                     prompt="Select camera"
                 )
                 yield Button("Take Photo", id="take_photo_btn", variant="primary")
-                yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
+                # yield Button("Update EXIF Details from Camera", id="update_exif_btn", variant="default")
             
             # File naming grid
             # with Container(id="file_naming_grid"):
@@ -792,19 +792,19 @@ class CameraManager(Static):
             except Exception as e:
                 logger.error(f"Error handling photo request: {e}")
 
-    @on(Button.Pressed, "#take_photo_btn")
-    def on_take_photo_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle take photo button press."""
-        try:
-            logger.info("Take photo button pressed")
+    # @on(Button.Pressed, "#take_photo_btn")
+    # def on_take_photo_button_pressed(self, event: Button.Pressed) -> None:
+    #     """Handle take photo button press."""
+    #     try:
+    #         logger.info("Take photo button pressed")
             
-            # Instead of directly calling take_photo, add a command to the queue
-            self.photo_command_queue.put({
-                'command': 'take_photo',
-                'position': f"{self.forward_position}",
-                'axis': 'Manual'
-            })
-            logger.info("Added manual photo command to queue")
+    #         # Instead of directly calling take_photo, add a command to the queue
+    #         self.photo_command_queue.put({
+    #             'command': 'take_photo',
+    #             'position': f"{self.forward_position}",
+    #             'axis': 'Manual'
+    #         })
+    #         logger.info("Added manual photo command to queue")
             
-        except Exception as e:
-            logger.error(f"Error handling take photo button: {e}")
+    #     except Exception as e:
+    #         logger.error(f"Error handling take photo button: {e}")

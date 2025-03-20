@@ -219,6 +219,13 @@ class StepperMotor(Static):
                 self.query_one(CurrentPositionDisplay).current_position = self.current_position
                 self.moving = self.tic.get_current_position() != self.tic.get_target_position()
                 
+                # Update progress display when scanning
+                if self.scan_state != ScanState.IDLE:
+                    progress = self.query_one(ProgressDisplay)
+                    logger.debug(f"{self.id}: Updating progress - current_pos={self.current_position}, "
+                               f"scan_state={self.scan_state}")
+                    progress.update_progress(self.current_position)
+                
                 if self.moving:
                     logger.debug(f"{self.id} current position: {self.current_position}")
                     logger.debug(f"{self.id} target position: {self.target_position}")
@@ -233,7 +240,7 @@ class StepperMotor(Static):
                             })
                         except Exception as e:
                             logger.warning(f"Error updating position: {e}")
-                
+        
         except Exception as e:
             logger.error(f"Error watching current position: {e}")
 
@@ -578,17 +585,17 @@ class StepperMotor(Static):
         
         # Configuration controls - only enabled when OFF
         yield Select(
-            options=[(axis, axis) for axis in self.axes],  # Use list comprehension instead of generator
+            options=[(axis, axis) for axis in self.axes],
             id="axis_stepper",
-            value=self.axes[0],  # Default to first axis
-            allow_blank=True,  # Allow blank selection
+            value=self.axes[0],
+            allow_blank=True,
             prompt="Select axis"
         )
         yield Select(
-            options=[(serial, serial) for serial in self.serial_numbers],  # Use list comprehension
+            options=[(serial, serial) for serial in self.serial_numbers],
             id="serial_stepper",
-            value=self.serial_numbers[0],  # Default to first serial
-            allow_blank=True,  # Allow blank selection
+            value=self.serial_numbers[0],
+            allow_blank=True,
             prompt="Select device"
         )
         yield Select(
@@ -640,20 +647,9 @@ class StepperMotor(Static):
             tooltip="Enter the maximum motor position in steps (-2,147,483,648 to 2,147,483,647)",
             type="integer"
         )
-        yield Static()
-        # yield ProgressDisplay()
+        # Add the progress display
+        yield ProgressDisplay(id=f"progress_display_{self.stepper_num}")
         
-        # Add spacers to fill the grid properly
-        for _ in range(4):  # Add 4 spacers to fill the last row of the 4x5 grid
-            yield Static()
-        
-        # Now add the progress bar as the last widget, which will appear in the 6th row
-        progress_bar = ProgressDisplay(id="progress_display")
-        progress_bar.styles.column_span = 4  # Span all columns
-        yield progress_bar
-        
-        # Initialize with visible progress
-        self.set_timer(0.2, lambda: progress_bar.update(progress=10))
 
     def get_division_positions(self) -> list[int]:
         """Calculate all positions to stop at during scan, returning integer positions"""
@@ -718,28 +714,30 @@ class StepperMotor(Static):
             target_pos = positions[self.current_division]
             self.target_position = target_pos
             
-            # Update progress tracking
-            progress = self.query_one(ProgressDisplay)
-            progress.start_new_movement(current_pos, target_pos)
+            # No need to update progress display here since watch_current_position 
+            # will handle progress updates during movement
             self.scan_state = ScanState.MOVING
 
     def start_scan(self) -> None:
         """Start a new scan"""
         if not self.validate_scan_parameters():
+            logger.warning(f"{self.id}: Invalid scan parameters")
             return
         
         positions = self.get_division_positions()
         if not positions:
+            logger.warning(f"{self.id}: No positions calculated for scan")
             return
         
         # Reset scan state
         self.current_division = 0
         self.target_position = positions[0]
         
-        # Initialize progress display
+        # Initialize progress display with min/max positions
         progress = self.query_one(ProgressDisplay)
-        progress.reset()
-        progress.start_new_movement(self.current_position, self.target_position)
+        logger.info(f"{self.id}: Starting scan - min_pos={self.min_position}, max_pos={self.max_position}, "
+                    f"divisions={len(positions)}")
+        progress.set_range(float(self.min_position), float(self.max_position))
         
         # Start state machine
         self.scan_state = ScanState.MOVING
@@ -769,9 +767,10 @@ class StepperMotor(Static):
         self.scan_state = ScanState.IDLE
         self.current_division = 0
         
-        # Reset progress display
+        # Reset progress display range
         progress = self.query_one(ProgressDisplay)
-        progress.reset()
+        logger.debug(f"{self.id}: Resetting progress display")
+        progress.set_range(0, 0)  # Reset range to show empty progress
         
         # Update displays
         current_pos_display = self.query_one(CurrentPositionDisplay)
