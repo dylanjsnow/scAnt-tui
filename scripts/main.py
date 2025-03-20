@@ -41,6 +41,17 @@ class ScannerApp(App):
             self.camera_photo_queue = Queue()  # New queue for photo requests
             logger.info("Initialized position and camera photo queues")
             logger.info("Settings manager initialized successfully")
+            
+            # Initialize stepper motors with their respective numbers
+            self.stepper_1 = None  # Forward axis
+            self.stepper_2 = None  # Tilt axis
+            self.stepper_3 = None  # Yaw axis
+            
+            # Initialize camera
+            self.camera = None
+            
+            # Initialize scan manager (will be set after steppers are created)
+            self.scan_manager = None
         except Exception as e:
             logger.error(f"Failed to initialize settings manager: {e}")
             raise
@@ -57,20 +68,53 @@ class ScannerApp(App):
                 logger.info("Creating camera manager")
                 yield CameraManager(
                     position_queue=self.position_queue,
-                    camera_photo_queue=self.camera_photo_queue,  # Pass the new queue
+                    camera_photo_queue=self.camera_photo_queue,
                     settings_manager=self.settings_manager
                 )
                 
                 # Stepper motors in a vertical container
                 with Vertical(id="stepper_container"):
                     logger.info("Creating stepper motor instances")
-                    for i in range(3):
-                        yield StepperMotor(
-                            settings_manager=self.settings_manager,
-                            position_queue=self.position_queue,
-                            camera_photo_queue=self.camera_photo_queue,  # Pass the new queue
-                            stepper_num=i+1
-                        )
+                    # Create and store stepper instances
+                    self.stepper_1 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=1
+                    )
+                    self.stepper_2 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=2
+                    )
+                    self.stepper_3 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=3
+                    )
+                    
+                    # Yield the stepper motors to render them
+                    yield self.stepper_1
+                    yield self.stepper_2
+                    yield self.stepper_3
+
+                # Create camera instance
+                self.camera = CameraManager(
+                    position_queue=self.position_queue,
+                    camera_photo_queue=self.camera_photo_queue,
+                    settings_manager=self.settings_manager
+                )
+
+                # Create scan manager with stepper motor instances
+                self.scan_manager = ScanManager(
+                    stepper_motors=[self.stepper_1, self.stepper_2, self.stepper_3],
+                    camera=self.camera
+                )
+                
+                # Yield the scan manager
+                yield self.scan_manager
             
             # yield Footer()
             logger.debug("App composition completed successfully")

@@ -29,9 +29,9 @@
     "camera": {
         "subject": "test-subject",
         "owner": "dylan",
-        "yaw_position": "0",
-        "tilt_position": "0",
-        "forward_position": "-2779",
+        "yaw_position": "1151",
+        "tilt_position": "-3873",
+        "forward_position": "523",
         "project_name": "test-project",
         "subject_id": "1",
         "scale": "1:1",
