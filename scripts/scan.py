@@ -10,11 +10,31 @@ logger = logging.getLogger(__name__)
 class ScanManager(Static):
     """Manages coordinated scanning across all stepper motors"""
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.stepper_motors = []
+    def __init__(
+        self,
+        stepper_motors=None,
+        camera=None,
+        *args,
+        **kwargs
+    ):
+        """Initialize the scan manager with stepper motors and camera"""
+        # Initialize parent class first, without our custom kwargs
+        super().__init__(*args)  # Only pass args, not kwargs
+        
+        # Store stepper motors and camera
+        self.stepper_motors = stepper_motors if stepper_motors else []
+        self.camera = camera
         self.scanning = False
-        logger.debug("ScanManager initialized")
+        
+        if self.stepper_motors:
+            logger.info(f"Successfully found and stored {len(self.stepper_motors)} stepper motors")
+        else:
+            logger.warning("No stepper motors provided to ScanManager")
+            
+        if self.camera:
+            logger.info("Successfully stored camera reference")
+        else:
+            logger.warning("No camera provided to ScanManager")
         
     def on_mount(self) -> None:
         """Get references to stepper motors after mount"""
@@ -22,13 +42,15 @@ class ScanManager(Static):
         def get_steppers():
             try:
                 self.stepper_motors = [
-                    self.app.query_one("#stepper_motor_1"),
-                    self.app.query_one("#stepper_motor_2"), 
-                    self.app.query_one("#stepper_motor_3")
+                    self.app.query_one("#stepper_1"),
+                    self.app.query_one("#stepper_2"), 
+                    self.app.query_one("#stepper_3")
                 ]
-                logger.debug(f"Found {len(self.stepper_motors)} stepper motors")
+                logger.info(f"Successfully found and stored {len(self.stepper_motors)} stepper motors: {[motor.id for motor in self.stepper_motors]}")
             except Exception as e:
                 logger.error(f"Error getting stepper motors: {e}")
+                # Try again after a short delay
+                self.set_timer(0.5, get_steppers)
             
         self.set_timer(0.1, get_steppers)
         logger.debug("ScanManager mounted")
@@ -36,7 +58,7 @@ class ScanManager(Static):
     def compose(self) -> ComposeResult:
         """Create child widgets for scan management"""
         yield Button("Start Full Scan", id="start_full_scan", variant="success")
-        yield Button("Stop All", id="stop_all_scan", variant="error")
+        yield Button("EMERGENCY STOP", id="emergency_stop", variant="error", classes="emergency-stop")
         logger.debug("ScanManager widgets composed")
         
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -47,8 +69,8 @@ class ScanManager(Static):
             
             if event.button.id == "start_full_scan":
                 self.start_full_scan()
-            elif event.button.id == "stop_all_scan":
-                self.stop_all_scans()
+            elif event.button.id == "emergency_stop":
+                self.emergency_stop()
                 
         except Exception as e:
             logger.error(f"Error handling button press: {e}")
@@ -56,34 +78,20 @@ class ScanManager(Static):
     def start_full_scan(self) -> None:
         """Start a coordinated scan across all motors"""
         if not self.stepper_motors:
-            logger.warning("No stepper motors available for scanning")
+            logger.warning("Cannot start scan - no stepper motors available")
             return
             
-        # Check if all motors are ready
-        ready_motors = []
-        for motor in self.stepper_motors:
-            if motor.validate_scan_parameters():
-                ready_motors.append(motor)
-                logger.debug(f"Motor {motor.id} ready for scanning")
-            else:
-                logger.warning(f"Motor {motor.id} not ready for scanning")
-                
-        if not ready_motors:
-            logger.warning("No motors ready for scanning")
-            return
-            
-        # Start scan on all ready motors
+        logger.info("Starting full scan across all motors")
         self.scanning = True
-        for motor in ready_motors:
-            motor.start_scan()
-            logger.info(f"Started scan on motor {motor.id}")
+        # Start scan on each motor
+        for motor in self.stepper_motors:
+            if motor:
+                motor.start_scan()
             
         # Update button states
         try:
             start_button = self.query_one("#start_full_scan")
             start_button.disabled = True
-            stop_button = self.query_one("#stop_all_scan") 
-            stop_button.disabled = False
             logger.debug("Scan buttons updated")
         except Exception as e:
             logger.error(f"Error updating scan buttons: {e}")
@@ -91,28 +99,6 @@ class ScanManager(Static):
         # Set up monitoring of scan completion
         self.set_interval(0.1, self.check_scan_completion)
         logger.debug("Scan completion monitoring started")
-        
-    def stop_all_scans(self) -> None:
-        """Stop scanning on all motors"""
-        if not self.stepper_motors:
-            logger.warning("No stepper motors available to stop")
-            return
-            
-        self.scanning = False
-        for motor in self.stepper_motors:
-            if motor.scan_state != ScanState.IDLE:
-                motor.stop_scan()
-                logger.info(f"Stopped scan on motor {motor.id}")
-                
-        # Update button states
-        try:
-            start_button = self.query_one("#start_full_scan")
-            start_button.disabled = False
-            stop_button = self.query_one("#stop_all_scan")
-            stop_button.disabled = True
-            logger.debug("Scan buttons updated after stop")
-        except Exception as e:
-            logger.error(f"Error updating scan buttons after stop: {e}")
         
     def check_scan_completion(self) -> bool:
         """Check if all motors have completed scanning"""
@@ -133,8 +119,6 @@ class ScanManager(Static):
             try:
                 start_button = self.query_one("#start_full_scan")
                 start_button.disabled = False
-                stop_button = self.query_one("#stop_all_scan")
-                stop_button.disabled = True
                 logger.debug("Scan buttons updated after completion")
             except Exception as e:
                 logger.error(f"Error updating scan buttons after completion: {e}")
@@ -142,3 +126,20 @@ class ScanManager(Static):
             return False  # Stop the interval
             
         return True  # Continue checking
+
+    def emergency_stop(self) -> None:
+        """Emergency stop all motors"""
+        logger.info("Emergency stop triggered")
+        self.scanning = False
+        # Stop all motors
+        for motor in self.stepper_motors:
+            if motor:
+                motor.stop_scan()
+            
+        # Update button states
+        try:
+            start_button = self.query_one("#start_full_scan")
+            start_button.disabled = False
+            logger.debug("Scan buttons updated after emergency stop")
+        except Exception as e:
+            logger.error(f"Error updating scan buttons after emergency stop: {e}")

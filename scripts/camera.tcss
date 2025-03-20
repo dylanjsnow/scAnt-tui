@@ -1,13 +1,13 @@
 CameraManager {
     layout: vertical;
-    height: auto;
+    height: 100%;
     margin: 1;
     padding: 1;
 }
 
 #camera_grid {
     layout: vertical;
-    height: auto;
+    height: 100%;
     margin: 1;
     padding: 1;
 }
@@ -22,8 +22,8 @@ CameraManager {
     layout: grid;
     grid-size: 2;
     grid-columns: auto 1fr;
-    grid-rows: auto;
-    height: auto;
+    grid-rows: 100%;
+    height: 100%;
     margin: 1;
     padding: 1;
 }

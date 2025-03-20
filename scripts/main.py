@@ -6,6 +6,9 @@ from stepper_motor import StepperMotor
 from camera import CameraManager
 from utils import ScanState
 from settings import SettingsManager
+from scan import ScanManager
+from multiprocessing import Queue
+import queue
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -28,12 +31,27 @@ class ScannerApp(App):
         ("d", "toggle_dark", "Toggle Dark Mode"),
     ]
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__()
+        self.settings_manager = None
         logger.info("Initializing ScannerApp")
         try:
             self.settings_manager = SettingsManager("settings.json")
+            self.position_queue = Queue()
+            self.camera_photo_queue = Queue()  # New queue for photo requests
+            logger.info("Initialized position and camera photo queues")
             logger.info("Settings manager initialized successfully")
+            
+            # Initialize stepper motors with their respective numbers
+            self.stepper_1 = None  # Forward axis
+            self.stepper_2 = None  # Tilt axis
+            self.stepper_3 = None  # Yaw axis
+            
+            # Initialize camera
+            self.camera = None
+            
+            # Initialize scan manager (will be set after steppers are created)
+            self.scan_manager = None
         except Exception as e:
             logger.error(f"Failed to initialize settings manager: {e}")
             raise
@@ -46,24 +64,59 @@ class ScannerApp(App):
             
             # Main app container as a vertical layout
             with Container(id="app_container"):
-                # Control buttons for all motors at the very top
-                with Horizontal(id="control_buttons"):
-                    yield Button("Home All", id="home_all_btn", variant="primary")
-                    yield Button("Stop All", id="stop_all_btn", variant="error")
-                
-                # Stepper motors in a vertical container to show in a column
-                with Vertical(id="stepper_container"):
-                    logger.info("Creating stepper motor instances")
-                    # Create stepper motors with shared settings manager
-                    for i in range(1, 4):
-                        logger.debug(f"Creating stepper motor {i}")
-                        yield StepperMotor(stepper_id=str(i), settings_manager=self.settings_manager)
-                
                 # Camera manager below the control buttons
                 logger.info("Creating camera manager")
-                yield CameraManager(settings_manager=self.settings_manager)
+                yield CameraManager(
+                    position_queue=self.position_queue,
+                    camera_photo_queue=self.camera_photo_queue,
+                    settings_manager=self.settings_manager
+                )
+                
+                # Stepper motors in a vertical container
+                with Vertical(id="stepper_container"):
+                    logger.info("Creating stepper motor instances")
+                    # Create and store stepper instances
+                    self.stepper_1 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=1
+                    )
+                    self.stepper_2 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=2
+                    )
+                    self.stepper_3 = StepperMotor(
+                        self.settings_manager,
+                        self.position_queue,
+                        self.camera_photo_queue,
+                        stepper_num=3
+                    )
+                    
+                    # Yield the stepper motors to render them
+                    yield self.stepper_1
+                    yield self.stepper_2
+                    yield self.stepper_3
+
+                # Create camera instance
+                self.camera = CameraManager(
+                    position_queue=self.position_queue,
+                    camera_photo_queue=self.camera_photo_queue,
+                    settings_manager=self.settings_manager
+                )
+
+                # Create scan manager with stepper motor instances
+                self.scan_manager = ScanManager(
+                    stepper_motors=[self.stepper_1, self.stepper_2, self.stepper_3],
+                    camera=self.camera
+                )
+                
+                # Yield the scan manager
+                yield self.scan_manager
             
-            yield Footer()
+            # yield Footer()
             logger.debug("App composition completed successfully")
             
         except Exception as e:
@@ -96,18 +149,30 @@ class ScannerApp(App):
             logger.error(f"Error handling button press: {e}")
 
     def on_mount(self) -> None:
-        """Handle app mount event"""
+        """Handle app mount event."""
         logger.info("App mounted")
-        
-    def on_unmount(self) -> None:
-        """Handle app unmount event"""
-        logger.info("App unmounting")
+
+    async def on_unmount(self) -> None:
+        """Clean up when app unmounts."""
+        logger.info("App unmounting, cleaning up...")
         try:
-            # Save all settings before shutdown
-            self.settings_manager.save_all()
-            logger.info("Settings saved on shutdown")
+            # Save settings first
+            if self.settings_manager:
+                self.settings_manager.save_all()
+            
+            # Then close the queue
+            if hasattr(self, 'position_queue'):
+                # Drain the queue first
+                while not self.position_queue.empty():
+                    try:
+                        self.position_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                self.position_queue.close()
+                self.position_queue.join_thread()
+            
         except Exception as e:
-            logger.error(f"Error saving settings on shutdown: {e}")
+            logger.error(f"Error during app cleanup: {e}")
 
 if __name__ == "__main__":
     try:
