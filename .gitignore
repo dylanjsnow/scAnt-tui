@@ -175,3 +175,6 @@ results/**/*.jpg
 results/**/*.jpeg
 results/**/*.cr3
 
+# Logs
+*.log
+logs.txt
