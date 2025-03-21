@@ -1,6 +1,6 @@
 from textual.widgets import Static, Button, Input, Select, Label
 from textual.reactive import reactive
-from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraMessage
+from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraMessage, StepperMessage, StepperStatus
 from ticlib import TicUSB
 from textual import on
 from textual.app import ComposeResult
@@ -14,9 +14,14 @@ import logging
 from multiprocessing import Queue
 import asyncio
 import queue
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Optional
 
 # Create logger for this module
 logger = logging.getLogger(__name__)
+
+
 
 class StepperMotor(Static):
     """A stepper motor interface"""
@@ -43,15 +48,18 @@ class StepperMotor(Static):
     position_queue = reactive(None)  # Added for position queue
     stepper_num = reactive(1)  # Added for stepper number
     camera_photo_queue = reactive(None)  # Added for camera photo queue
+    scan_manager_queue = reactive(None)  # Added for scan manager queue
     
-    def __init__(self, settings_manager, position_queue: Queue, camera_photo_queue: Queue, stepper_num: int = 1, *args, **kwargs):
-        """Initialize stepper motor with settings manager."""
+    def __init__(self, settings_manager, position_queue: Queue, camera_photo_queue: Queue, 
+                 scan_manager_queue: Queue, stepper_num: int = 1, *args, **kwargs):
+        """Initialize stepper motor with settings manager and queues."""
         super().__init__(*args, **kwargs)
         
         self.settings_manager = settings_manager
         self.position_queue = position_queue
         self.camera_photo_queue = camera_photo_queue
         self.stepper_num = stepper_num
+        self.scan_manager_queue = scan_manager_queue
         
         # Initialize with empty lists if no devices found
         self.axes = get_axes() or ["Yaw", "Tilt", "Forward"]
@@ -667,33 +675,38 @@ class StepperMotor(Static):
             return []
 
     def update_scan_state(self) -> None:
-        """Update the scan state based on current position"""
+        """Update the scan state and notify scan manager via queue"""
         try:
-            if self.scan_state == ScanState.MOVING:
-                if self.current_position == self.target_position:
-                    self.scan_state = ScanState.WAITING
-                    logger.debug(f"Motor {self.id} reached target, entering wait state")
-                    
-                    # If this is the forward axis motor (stepper_1), request photo
-                    if self.stepper_num == 1:  # Forward axis
-                        try:
-                            # Send message to camera photo queue instead of position queue
-                            message = {
-                                'message_type': CameraMessage.TAKE_PHOTO,
-                                'position': self.current_position,
-                                'axis': self.axis
-                            }
-                            self.camera_photo_queue.put(message)
-                            logger.info(f"Requested photo at position {self.current_position}")
-                        except Exception as e:
-                            logger.error(f"Failed to request photo: {e}")
-                    
-                    # Set timer for next movement
-                    self.set_timer(self.DIVISION_WAIT_TIME, self.continue_scan)
-                    
-            elif self.scan_state == ScanState.WAITING:
-                # Waiting is handled by continue_scan callback
-                pass
+            if self.scan_state != ScanState.IDLE:
+                # Send status update to scan manager
+                status = StepperStatus(
+                    stepper_num=self.stepper_num,
+                    axis=self.axis,
+                    current_position=self.current_position,
+                    target_position=self.target_position,
+                    scan_state=self.scan_state,
+                    current_division=self.current_division,
+                    total_divisions=len(self.get_division_positions())
+                )
+                self.scan_manager_queue.put((StepperMessage.STATUS, status))
+
+                if self.scan_state == ScanState.MOVING:
+                    if self.current_position == self.target_position:
+                        self.scan_state = ScanState.WAITING
+                        logger.debug(f"Motor {self.id} reached target, entering wait state")
+                        
+                        # If this is the forward axis motor (stepper_1), request photo
+                        if self.stepper_num == 1:  # Forward axis
+                            try:
+                                message = {
+                                    'message_type': CameraMessage.TAKE_PHOTO,
+                                    'position': self.current_position,
+                                    'axis': self.axis
+                                }
+                                self.camera_photo_queue.put(message)
+                                logger.info(f"Requested photo at position {self.current_position}")
+                            except Exception as e:
+                                logger.error(f"Failed to request photo: {e}")
 
         except Exception as e:
             logger.error(f"Error updating scan state: {e}")
@@ -895,3 +908,12 @@ class StepperMotor(Static):
                 self.serial_number = settings.get("serial", "")
                 self.current_limit = settings.get("current_limit", "0")
                 # ... rest of settings loading ...
+
+    def move_to_position(self, position: float) -> None:
+        """Move to specified position and update state"""
+        if not self.energized or not self.initialized:
+            return
+        
+        self.target_position = position
+        self.scan_state = ScanState.MOVING
+        logger.info(f"{self.id} moving to position {position}")

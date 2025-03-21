@@ -39,6 +39,7 @@ class ScannerApp(App):
             self.settings_manager = SettingsManager("settings.json")
             self.position_queue = Queue()
             self.camera_photo_queue = Queue()  # New queue for photo requests
+            self.scan_manager_queue = Queue()  # New queue for scan manager communication
             logger.info("Initialized position and camera photo queues")
             logger.info("Settings manager initialized successfully")
             
@@ -80,19 +81,25 @@ class ScannerApp(App):
                         self.settings_manager,
                         self.position_queue,
                         self.camera_photo_queue,
-                        stepper_num=1
+                        self.scan_manager_queue,
+                        stepper_num=1,
+                        id="stepper_1"
                     )
                     self.stepper_2 = StepperMotor(
                         self.settings_manager,
                         self.position_queue,
                         self.camera_photo_queue,
-                        stepper_num=2
+                        self.scan_manager_queue,
+                        stepper_num=2,
+                        id="stepper_2"
                     )
                     self.stepper_3 = StepperMotor(
                         self.settings_manager,
                         self.position_queue,
                         self.camera_photo_queue,
-                        stepper_num=3
+                        self.scan_manager_queue,
+                        stepper_num=3,
+                        id="stepper_3"
                     )
                     
                     # Yield the stepper motors to render them
@@ -110,7 +117,8 @@ class ScannerApp(App):
                 # Create scan manager with stepper motor instances
                 self.scan_manager = ScanManager(
                     stepper_motors=[self.stepper_1, self.stepper_2, self.stepper_3],
-                    camera=self.camera
+                    camera=self.camera,
+                    scan_manager_queue=self.scan_manager_queue
                 )
                 
                 # Yield the scan manager
@@ -160,7 +168,7 @@ class ScannerApp(App):
             if self.settings_manager:
                 self.settings_manager.save_all()
             
-            # Then close the queue
+            # Then close the queues
             if hasattr(self, 'position_queue'):
                 # Drain the queue first
                 while not self.position_queue.empty():
@@ -170,6 +178,16 @@ class ScannerApp(App):
                         break
                 self.position_queue.close()
                 self.position_queue.join_thread()
+                
+            # Clean up scan manager queue
+            if hasattr(self, 'scan_manager_queue'):
+                while not self.scan_manager_queue.empty():
+                    try:
+                        self.scan_manager_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                self.scan_manager_queue.close()
+                self.scan_manager_queue.join_thread()
             
         except Exception as e:
             logger.error(f"Error during app cleanup: {e}")

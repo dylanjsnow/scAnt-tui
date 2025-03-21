@@ -103,4 +103,12 @@ Ranges for stepper motors:
 - Forward: 0 to 170000 with middle zeroing, speed 50000
 
 
+### Results
+
+1st attempt at complete scan:
+
+Time to take 10 photos across 10 positions of10000 position units (-5000 to 5000) of Forward axis movement at default speed: 33 seconds
+Time to take 180 photos across 18 positions of 1800 position units of Yaw axis movement at default speed: 1644 seconds (27.4 minutes)
+Time to take 900 photos across 5 positions of -2000 position units of Tilt axis movement at default speed: 8220 seconds (2 hours 17 minutes)
+
 
