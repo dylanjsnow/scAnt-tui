@@ -122,43 +122,43 @@ Time to take 900 photos across 5 positions of -2000 position units of Tilt axis 
 
 All below images were taken with the same settings:
 
-F-stop: 22
-ISO: 100
-Focus: manually adjusted using reference focus highlighting (focus peaking) on the color calibration target
-Flash: Godox Wistro AR400
-Flash Trigger: via hotshoed flashsync mounted on top of Canon Camera, channel 11, 2.4GHz, via X2T-C Godox trigger, with High Speed Sync (HSS) enabled on the Canon camera menu
-Flash Receiver: to XTR16 plugged in via USB of Godox Wistro AR400 ring flash
+- F-stop: 22
+- ISO: 100
+- Focus: manually adjusted using reference focus highlighting (focus peaking) on the color calibration target
+- Flash: Godox Wistro AR400
+- Flash Trigger: via hotshoed flashsync mounted on top of Canon Camera, channel 11, 2.4GHz, via X2T-C Godox trigger, with High Speed Sync (HSS) enabled on the Canon camera menu
+- Flash Receiver: to XTR16 plugged in via USB of Godox Wistro AR400 ring flash
 
 ![Canon 35mm Macro example image, unpolarized](./docs/canon-35-mm-macro-example-unpolarized.jpg)
 
 **Unpolarized example**
-Flash Power: 1/128 power
-Light Polarization Filter: none
-Lens Polarization Filter: none
-Lens: Canon 35mm macro
+- Flash Power: 1/128 power
+- Light Polarization Filter: none
+- Lens Polarization Filter: none
+- Lens: Canon 35mm macro
 
 ![Canon 35mm Macro example image, linearly polarized](./docs/canon-35-mm-macro-example-linear-polarized.jpg)
 
 **Linear polarization example**
-Flash Power: 1/4 power
-Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
-Lens Polarization Filter: unpolarized
-Lens: Canon 35mm macro
+- Flash Power: 1/4 power
+- Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
+- Lens Polarization Filter: unpolarized
+- Lens: Canon 35mm macro
 
 ![Canon 35mm Macro example image, cross-polarized](./docs/canon-35-mm-macro-example-cross-polarized.jpg)
 
 **Cross polarization example**
-Flash Power: 1/4 power
-Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
-Lens Polarization Filter: angled with words 'CANON' at an angle of about 45 degrees clockwise from pointing upwards as looking in the same direction as the lens
-Lens: Canon 35mm macro
+- Flash Power: 1/4 power
+- Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
+- Lens Polarization Filter: angled with words 'CANON' at an angle of about 45 degrees clockwise from pointing upwards as looking in the same direction as the lens
+- Lens: Canon 35mm macro
 
 ![Laowa 65mm Macro example image, cross-polarized](./docs/laowa-65-mm-macro-example.jpg)
 
 **Cross polarization example**
-Flash Power: 1/4 power
-Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
-Lens Polarization Filter: angled with words 'CANON' at an angle of about 45 degrees clockwise from pointing upwards as looking in the same direction as the lens
-Lens: Laowa 65mm macro
+- Flash Power: 1/4 power
+- Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
+- Lens Polarization Filter: angled with words 'CANON' at an angle of about 45 degrees clockwise from pointing upwards as looking in the same direction as the lens
+- Lens: Laowa 65mm macro
 
 
