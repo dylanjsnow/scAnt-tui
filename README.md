@@ -137,7 +137,7 @@ Light Polarization Filter: none
 Lens Polarization Filter: none
 Lens: Canon 35mm macro
 
-![Canon 35mm Macro example image, linearly polarized](./docs/canon-35-mm-macro-example-unpolarized.jpg)
+![Canon 35mm Macro example image, linearly polarized](./docs/canon-35-mm-macro-example-linear-polarized.jpg)
 
 **Linear polarization example**
 Flash Power: 1/4 power
@@ -145,7 +145,7 @@ Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR4
 Lens Polarization Filter: unpolarized
 Lens: Canon 35mm macro
 
-![Canon 35mm Macro example image, cross-polarized](./docs/canon-35-mm-macro-example-unpolarized.jpg)
+![Canon 35mm Macro example image, cross-polarized](./docs/canon-35-mm-macro-example-cross-polarized.jpg)
 
 **Cross polarization example**
 Flash Power: 1/4 power
