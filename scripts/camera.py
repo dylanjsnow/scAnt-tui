@@ -651,9 +651,6 @@ class CameraManager(Static):
             # thumb.thumbnail((160, 120), Image.LANCZOS)
             # thumb.save(thumb_filename, 'JPEG', quality=85)
             
-            # Show original image
-            img.show()
-            
             logger.debug("Image saved with EXIF data and displayed")
             return True
         

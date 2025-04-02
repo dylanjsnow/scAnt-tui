@@ -5,8 +5,8 @@
         "current_limit": "9",
         "max_speed": 15000.0,
         "divisions": "10",
-        "min_position": "-5000",
-        "max_position": "5000"
+        "min_position": "10000",
+        "max_position": "11000"
     },
     "stepper_2": {
         "axis": "Yaw",
@@ -23,15 +23,15 @@
         "current_limit": "21",
         "max_speed": 50000.0,
         "divisions": "5",
-        "min_position": "-1000",
-        "max_position": "1000"
+        "min_position": "20000",
+        "max_position": "20010"
     },
     "camera": {
         "subject": "test-subject",
         "owner": "dylan",
-        "yaw_position": "0",
-        "tilt_position": "-999",
-        "forward_position": "-4997",
+        "yaw_position": "207",
+        "tilt_position": "13808",
+        "forward_position": "9996",
         "project_name": "test-project",
         "subject_id": "1",
         "scale": "1:1",
