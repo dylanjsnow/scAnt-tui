@@ -73,8 +73,8 @@ print("display image using Pillow")
 data = memoryview(file_data)
 print(type(data), len(data))
 print(data[:10].tolist())
-image = Image.open(io.BytesIO(file_data))
-image.show()
+# image = Image.open(io.BytesIO(file_data))
+# image.show()
 
 # Convert the raw Canon .cr3 file to a .jpg file
 # https://askubuntu.com/questions/1039259/how-to-convert-cr3-raw-files-to-jpg
