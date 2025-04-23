@@ -38,10 +38,10 @@ class ScannerApp(App):
         try:
             self.settings_manager = SettingsManager("settings.json")
             self.position_queue = Queue()
-            self.camera_photo_queue = Queue()  # New queue for photo requests
-            self.scan_manager_queue = Queue()  # New queue for scan manager communication
-            logger.info("Initialized position and camera photo queues")
-            logger.info("Settings manager initialized successfully")
+            self.camera_photo_queue = Queue()  # For photo requests
+            self.camera_state_queue = Queue()  # New queue for camera state updates
+            self.scan_manager_queue = Queue()  # For scan manager communication
+            logger.info("Initialized all queues")
             
             # Initialize stepper motors with their respective numbers
             self.stepper_1 = None  # Forward axis
@@ -70,6 +70,7 @@ class ScannerApp(App):
                 yield CameraManager(
                     position_queue=self.position_queue,
                     camera_photo_queue=self.camera_photo_queue,
+                    camera_state_queue=self.camera_state_queue,
                     settings_manager=self.settings_manager
                 )
                 
@@ -82,6 +83,7 @@ class ScannerApp(App):
                         self.position_queue,
                         self.camera_photo_queue,
                         self.scan_manager_queue,
+                        self.camera_state_queue,
                         stepper_num=1,
                         id="stepper_1"
                     )
@@ -90,6 +92,7 @@ class ScannerApp(App):
                         self.position_queue,
                         self.camera_photo_queue,
                         self.scan_manager_queue,
+                        self.camera_state_queue,
                         stepper_num=2,
                         id="stepper_2"
                     )
@@ -98,6 +101,7 @@ class ScannerApp(App):
                         self.position_queue,
                         self.camera_photo_queue,
                         self.scan_manager_queue,
+                        self.camera_state_queue,
                         stepper_num=3,
                         id="stepper_3"
                     )
@@ -107,10 +111,11 @@ class ScannerApp(App):
                     yield self.stepper_2
                     yield self.stepper_3
 
-                # Create camera instance
+                # Create camera instance for scan manager
                 self.camera = CameraManager(
                     position_queue=self.position_queue,
                     camera_photo_queue=self.camera_photo_queue,
+                    camera_state_queue=self.camera_state_queue,
                     settings_manager=self.settings_manager
                 )
 

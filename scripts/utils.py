@@ -16,11 +16,12 @@ class CameraState(Enum):
     CAPTURING = auto()
     WAITING = auto()
 
-class CameraMessage:
+class CameraMessage(Enum):
     """Message types for camera queue"""
-    TAKE_PHOTO = "TAKE_PHOTO"
+    TAKE_PHOTO = auto()
     PHOTO_COMPLETE = "PHOTO_COMPLETE"
     PHOTO_ERROR = "PHOTO_ERROR"
+    STATE_UPDATE = auto()  # New message type for camera state updates
 
 class StepperMessage(Enum):
     STATUS = auto()

@@ -28,7 +28,8 @@ class CameraManager(Static):
     
     status = reactive("Ready")
     
-    def __init__(self, position_queue: Queue, camera_photo_queue: Queue = None, settings_manager=None, id: str = "camera_manager"):
+    def __init__(self, position_queue: Queue, camera_photo_queue: Queue, camera_state_queue: Queue, 
+                 settings_manager=None, id: str = "camera_manager"):
         """Initialize the camera manager."""
         super().__init__(id=id)
         
@@ -53,6 +54,7 @@ class CameraManager(Static):
         
         # Use provided camera_photo_queue or create a new one
         self.camera_photo_queue = camera_photo_queue
+        self.camera_state_queue = camera_state_queue
         self.state = CameraState.IDLE
         
         # Start position update process
@@ -501,7 +503,9 @@ class CameraManager(Static):
         try:
             logger.info(f"Taking photo at position {metadata.get('position', 'unknown')} on axis {metadata.get('axis', 'unknown')} axis")
             
+            # Notify state change to CAPTURING
             self.state = CameraState.CAPTURING
+            self.camera_state_queue.put(self.state)
             
             # Take the photo using gphoto2
             capture_path = await self._capture_image()
@@ -509,6 +513,7 @@ class CameraManager(Static):
             if not capture_path:
                 logger.error("Failed to capture image")
                 self.state = CameraState.IDLE
+                self.camera_state_queue.put(self.state)
                 return False
 
             # Create results directory if it doesn't exist
@@ -534,14 +539,18 @@ class CameraManager(Static):
             except Exception as e:
                 logger.error(f"Error saving photo: {e}")
                 self.state = CameraState.IDLE
+                self.camera_state_queue.put(self.state)
                 return False
 
+            # Notify state change back to IDLE
             self.state = CameraState.IDLE
+            self.camera_state_queue.put(self.state)
             return True
 
         except Exception as e:
             logger.error(f"Error taking photo: {str(e)}")
             self.state = CameraState.IDLE
+            self.camera_state_queue.put(self.state)
             return False
 
     def take_photo_sync(self, metadata=None):

@@ -1,6 +1,6 @@
 from textual.widgets import Static, Button, Input, Select, Label
 from textual.reactive import reactive
-from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraMessage, StepperMessage, StepperStatus
+from utils import get_axes, get_stepper_motor_serial_numbers, ScanState, CameraMessage, StepperMessage, StepperStatus, CameraState
 from ticlib import TicUSB
 from textual import on
 from textual.app import ComposeResult
@@ -49,15 +49,18 @@ class StepperMotor(Static):
     stepper_num = reactive(1)  # Added for stepper number
     camera_photo_queue = reactive(None)  # Added for camera photo queue
     scan_manager_queue = reactive(None)  # Added for scan manager queue
+    camera_state = CameraState.IDLE
+    camera_state_queue = reactive(None)  # New queue for camera state
     
     def __init__(self, settings_manager, position_queue: Queue, camera_photo_queue: Queue, 
-                 scan_manager_queue: Queue, stepper_num: int = 1, *args, **kwargs):
+                 scan_manager_queue: Queue, camera_state_queue: Queue, stepper_num: int = 1, *args, **kwargs):
         """Initialize stepper motor with settings manager and queues."""
         super().__init__(*args, **kwargs)
         
         self.settings_manager = settings_manager
         self.position_queue = position_queue
         self.camera_photo_queue = camera_photo_queue
+        self.camera_state_queue = camera_state_queue  # New queue for camera state
         self.stepper_num = stepper_num
         self.scan_manager_queue = scan_manager_queue
         
@@ -106,6 +109,7 @@ class StepperMotor(Static):
         )
         
         logger.info(f"Initialized StepperMotor {self.id} with stepper_num {self.stepper_num}")
+        self.set_interval(0.1, self.check_camera_state)
 
     def reset(self):
         self.axis = ""
@@ -533,20 +537,18 @@ class StepperMotor(Static):
                 
                 # Validate speed range (0.005 to 50000 steps/s)
                 min_speed = 0.005  # 1/200 steps per second
-                max_speed = 50000
+                max_speed = 2_000_000 # 2 million
                 
-                if speed < min_speed:
-                    speed = min_speed
-                elif speed > max_speed:
-                    speed = max_speed
+                # if speed < min_speed:
+                #     speed = min_speed
+                # elif speed > max_speed:
+                #     speed = max_speed
                 
-                # Convert to integer for the Tic controller
-                speed_steps = int(speed * 10000)  # Tic expects speed in units of steps * 10000
-                
-                # Update the motor if connected
+                # Update the motor if connected (speed is already in pulses per 10000s)
                 if self.tic and self.energized:
-                    self.tic.set_max_speed(speed_steps)
+                    self.tic.set_max_speed(int(speed))
                     self.tic.exit_safe_start()
+                    logger.debug(f"{self.id}: Set max speed to {speed} pulses per 10000s")
                 
                 # Update display
                 self.max_speed = speed
@@ -698,13 +700,15 @@ class StepperMotor(Static):
                         # If this is the forward axis motor (stepper_1), request photo
                         if self.stepper_num == 1:  # Forward axis
                             try:
-                                message = {
-                                    'message_type': CameraMessage.TAKE_PHOTO,
-                                    'position': self.current_position,
-                                    'axis': self.axis
-                                }
-                                self.camera_photo_queue.put(message)
-                                logger.info(f"Requested photo at position {self.current_position}")
+                                # Only request photo if camera is IDLE
+                                if self.camera_state == CameraState.IDLE:
+                                    message = {
+                                        'message_type': CameraMessage.TAKE_PHOTO,
+                                        'position': self.current_position,
+                                        'axis': self.axis
+                                    }
+                                    self.camera_photo_queue.put(message)
+                                    logger.info(f"Requested photo at position {self.current_position}")
                             except Exception as e:
                                 logger.error(f"Failed to request photo: {e}")
 
@@ -714,6 +718,11 @@ class StepperMotor(Static):
     def continue_scan(self) -> None:
         """Called after waiting at a position"""
         if self.scan_state != ScanState.WAITING:
+            return
+            
+        # Only continue if camera is IDLE
+        if self.camera_state != CameraState.IDLE:
+            logger.debug(f"Motor {self.id} waiting for camera to become IDLE")
             return
             
         positions = self.get_division_positions()
@@ -726,9 +735,6 @@ class StepperMotor(Static):
             current_pos = self.current_position
             target_pos = positions[self.current_division]
             self.target_position = target_pos
-            
-            # No need to update progress display here since watch_current_position 
-            # will handle progress updates during movement
             self.scan_state = ScanState.MOVING
 
     def start_scan(self) -> None:
@@ -741,24 +747,40 @@ class StepperMotor(Static):
         if not positions:
             logger.warning(f"{self.id}: No positions calculated for scan")
             return
-        
-        # Reset scan state
-        self.current_division = 0
-        self.target_position = positions[0]
-        
-        # Initialize progress display with min/max positions
-        progress = self.query_one(ProgressDisplay)
-        logger.info(f"{self.id}: Starting scan - min_pos={self.min_position}, max_pos={self.max_position}, "
-                    f"divisions={len(positions)}")
-        progress.set_range(float(self.min_position), float(self.max_position))
-        
-        # Start state machine
-        self.scan_state = ScanState.MOVING
-        
-        # Update button states for scanning
-        self.update_control_states()
-        
-        logger.info(f"{self.id} starting scan with {len(positions)} positions")
+            
+        try:
+            # Apply current limit and max speed settings
+            current_limit = int(self.current_limit)
+            self.tic.set_current_limit(current_limit)
+            logger.debug(f"{self.id}: Applied current limit {current_limit}")
+            
+            # Set max speed (in pulses per 10000 seconds)
+            speed = self.max_speed
+            self.tic.set_max_speed(int(speed))
+            self.tic.exit_safe_start()
+            logger.debug(f"{self.id}: Applied max speed {speed} pulses per 10000s")
+            
+            # Reset scan state
+            self.current_division = 0
+            self.target_position = positions[0]
+            
+            # Initialize progress display with min/max positions
+            progress = self.query_one(ProgressDisplay)
+            logger.info(f"{self.id}: Starting scan - min_pos={self.min_position}, max_pos={self.max_position}, "
+                        f"divisions={len(positions)}")
+            progress.set_range(float(self.min_position), float(self.max_position))
+            
+            # Start state machine
+            self.scan_state = ScanState.MOVING
+            
+            # Update button states for scanning
+            self.update_control_states()
+            
+            logger.info(f"{self.id} starting scan with {len(positions)} positions")
+            
+        except Exception as e:
+            logger.error(f"Error starting scan: {e}")
+            return
 
     def stop_scan(self) -> None:
         """Stop the current scan"""
@@ -917,3 +939,13 @@ class StepperMotor(Static):
         self.target_position = position
         self.scan_state = ScanState.MOVING
         logger.info(f"{self.id} moving to position {position}")
+
+    def check_camera_state(self) -> None:
+        """Check for camera state updates"""
+        try:
+            if not self.camera_state_queue.empty():
+                state = self.camera_state_queue.get_nowait()
+                self.camera_state = state
+                logger.debug(f"Motor {self.id} received camera state update: {self.camera_state}")
+        except Exception as e:
+            logger.error(f"Error checking camera state: {e}")

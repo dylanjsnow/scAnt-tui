@@ -95,12 +95,12 @@ textual run --dev scripts/main.py
 - Current limit settings: https://www.pololu.com/docs/0J71/6#setting-current-limit
 - Maximum current limit for Tic T500 for the Pitch/ Yaw servo is 2131 mA.
 - Others are uncertain, believed to be 1000 mA.
-
-Ranges for stepper motors:
-
 - Tilt: 10 positions, -15000 to 12000 with middle zeroing, speed 15000
 - Yaw: 18 positions,0 to 1800 with no zeroing, speed 1000
 - Forward: 0 to 170000 with middle zeroing, speed 50000
+- Speed for servos is 200_000_000, 5_000_000_000 maximum
+
+New val
 
 
 ### Polarized Light setup
@@ -114,9 +114,9 @@ Ranges for stepper motors:
 
 1st attempt at complete scan:
 
-Time to take 10 photos across 10 positions of10000 position units (-5000 to 5000) of Forward axis movement at default speed: 33 seconds
-Time to take 180 photos across 18 positions of 1800 position units of Yaw axis movement at default speed: 1644 seconds (27.4 minutes) = 1.0GB
-Time to take 900 photos across 5 positions of -2000 position units of Tilt axis movement at default speed: 8220 seconds (2 hours 17 minutes) = 4.9GB
+- Time to take 10 photos across 10 positions of10000 position units (-5000 to 5000) of Forward axis movement at default speed: 33 seconds
+- Time to take 180 photos across 18 positions of 1800 position units of Yaw axis movement at default speed: 1644 seconds (27.4 minutes) = 1.0GB
+- Time to take 900 photos across 5 positions of -2000 position units of Tilt axis movement at default speed: 8220 seconds (2 hours 17 minutes) = 4.9GB
 
 #### Camera polarization filter image examples
 

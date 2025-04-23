@@ -162,8 +162,9 @@ class ScanManager(Static):
         self.stepper_statuses.clear()
         
         # Move all motors to their initial positions
+        # TEMPORARY: TODO: Remove this once we have the fixed Tic500 controller
         for motor in self.stepper_motors:
-            if motor:
+            if motor and motor.axis != "Yaw":
                 motor.start_scan()
         
         # Update button states
