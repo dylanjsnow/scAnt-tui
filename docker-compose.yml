@@ -6,6 +6,7 @@ services:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    attach: false
 
   # reachable on 9092 from the host and on 29092 from inside docker compose
   kafka:
@@ -24,6 +25,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
       KAFKA_MIN_INSYNC_REPLICAS: '1'
+    attach: false
 
   kafka-init:
     image: confluentinc/cp-kafka:latest
@@ -56,6 +58,7 @@ services:
       echo -e 'Successfully created the following topics:'
       kafka-topics --bootstrap-server kafka:29092 --list
       "
+    attach: false
 
   kafka-ui:
     container_name: kafka-ui
@@ -68,23 +71,41 @@ services:
       KAFKA_CLUSTERS_0_NAME: scant-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       DYNAMIC_CONFIG_ENABLED: 'true'
+    attach: false
     # volumes:
     #   - ./config.yml:/etc/kafkaui/dynamic_config.yaml
 
-  scant:
-    container_name: scant
+  scant-ui:
+    container_name: scant-ui
     depends_on: 
-      - kafka
+      - kafka-init
     build:
       context: ./scant
       dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
     restart: always
     ports:
       - 8080:8080
     privileged: true
     volumes:
       - ./scant/scripts:/app/scripts
+    command: ["python3","-u","/app/scripts/ui.py"]
+
+  scant-camera:
+    container_name: scant-camera
+    depends_on:
+      - kafka-init
+    build:
+      context: ./scant
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
+    privileged: true
+    volumes:
+      - ./scant/scripts:/app/scripts
       - /etc/udev/rules.d:/etc/udev/rules.d:ro  # Mount host's udev rules
       - /run/udev:/run/udev:ro  # Mount host's udev runtime
-    command: python3 /app/scripts/main.py
+    command: ["python3","-u","/app/scripts/camera.py"]
 

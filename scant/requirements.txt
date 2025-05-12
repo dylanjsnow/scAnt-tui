@@ -10,3 +10,4 @@ imageio
 rawpy
 kafka-python
 nicegui 
+aiokafka

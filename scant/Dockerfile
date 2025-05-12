@@ -29,4 +29,4 @@ RUN cd /app/bin/pololu-tic-1.8.1-linux-x86 && ./install.sh
 RUN useradd -m -G dialout,plugdev scant
 USER scant
 
-CMD ["python3", "/app/scripts/main.py"] 
+# CMD ["python3", "/app/scripts/main.py"] 

@@ -1,62 +1,41 @@
-from kafka import KafkaConsumer, KafkaProducer
-from datetime import datetime
-import time
-import json
+#!/usr/bin/env python3
+import asyncio
+from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+from utils import serializer, deserializer
 
-class CameraWorker:
-    def __init__(self):
-        self.consumer = KafkaConsumer('scant.control.commands', bootstrap_servers='kafka:29092')
-        self.producer = KafkaProducer(
-            bootstrap_servers='kafka:29092',
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
+# sent_one = False
 
-    def start(self):
-        print("Camera worker started...")
+# async def send_one():
+#     producer = AIOKafkaProducer(bootstrap_servers='kafka:29092', value_serializer=serializer)
+#     # Get cluster layout and initial topic/partition leadership information
+#     await producer.start()
+#     try:
+#         # Produce message
+#         await producer.send_and_wait("scant.system.logs", {"response":"good"})
+#     finally:
+#         # Wait for all pending messages to be delivered or expire.
+#         await producer.stop()
         
-        for message in self.consumer:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"timestamp_{timestamp}.txt"
-            
-            self.producer.send('scant.system.logs', {
-                'message': 'Saving image started',
-                'timestamp': timestamp
-            })
-            
-            self.producer.send('scant.sensor.camera', {
-                'status': 'started',
-                'timestamp': timestamp,
-                'filename': filename
-            })
-            
-            with open(filename, 'w') as f:
-                try:
-                    f.write(timestamp)
-                except Exception as e:
-                    error_msg = f"Error writing to file: {str(e)}"
-                    self.producer.send('scant.system.logs', {
-                        'message': error_msg,
-                        'timestamp': timestamp,
-                        'level': 'ERROR'
-                    })
-                    self.producer.send('scant.sensor.camera', {
-                        'status': 'error',
-                        'timestamp': timestamp,
-                        'filename': filename,
-                        'error': error_msg
-                    })
-                
-            time.sleep(1)
-            
-            self.producer.send('scant.system.logs', {
-                'message': f'Saving image complete: {filename}',
-                'timestamp': timestamp
-            })
-            
-            self.producer.send('scant.sensor.camera', {
-                'status': 'completed',
-                'timestamp': timestamp,
-                'filename': filename
-            })
+async def consume():
+    consumer = AIOKafkaConsumer(
+        'scant.control.commands',
+        bootstrap_servers='kafka:29092',
+        value_deserializer=deserializer)
+    # Get cluster layout and join group `my-group`
+    await consumer.start()
+    try:
+        # Consume messages
+        print("camera.py: Consuming messages")
+        async for msg in consumer:
+            print("consumed: ", msg)
+            # if not sent_one:
+            #     await send_one()
+            #     sent_one = True
+    finally:
+        # Will leave consumer group; perform autocommit if enabled.
+        await consumer.stop()
+        
+        
 
 
+asyncio.run(consume())
