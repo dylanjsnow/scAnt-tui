@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 import asyncio
+import logging
 from typing import Set
 import websockets
 from websockets.server import WebSocketServerProtocol
 from nicegui import app, ui
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 CONNECTIONS: Set[WebSocketServerProtocol] = set()
 
@@ -24,15 +32,27 @@ async def handle_connect(websocket: WebSocketServerProtocol):
     try:
         CONNECTIONS.add(websocket)
         connections_label.text = len(CONNECTIONS)
+        logger.info(f"New connection established. Total connections: {len(CONNECTIONS)}")
+        
         async for data in websocket:
+            logger.info(f"Received message: {data}")
             with messages:
                 ui.label(str(data))
+            
+            # Send acknowledgment back
+            # await websocket.send(f"Received: {data}")
+            # logger.info(f"Sent acknowledgment for message: {data}")
+            
+    except Exception as e:
+        logger.error(f"Error handling websocket connection: {e}")
     finally:
         CONNECTIONS.remove(websocket)
         connections_label.text = len(CONNECTIONS)
+        logger.info(f"Connection closed. Remaining connections: {len(CONNECTIONS)}")
 
 
 async def start_websocket_server():
+    logger.info("Starting websocket server on port 8765")
     async with websockets.serve(handle_connect, None, 8765):
         await asyncio.Future()
 

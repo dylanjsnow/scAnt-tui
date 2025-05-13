@@ -28,12 +28,18 @@ async def connect_to_websocket():
                         logger.info(f"Received message: {message}")
                         
                         # Try to parse as JSON if possible
-                        try:
-                            parsed_message = json.loads(message)
-                            logger.info(f"Parsed JSON: {parsed_message}")
-                        except json.JSONDecodeError:
-                            # Not JSON, just use the raw message
-                            pass
+                        # try:
+                        #     parsed_message = json.loads(message)
+                        #     logger.info(f"Parsed JSON: {parsed_message}")
+                        # except json.JSONDecodeError:
+                        #     # Not JSON, just use the raw message
+                        #     pass
+                        
+                        # Send a response back
+                        response = "Responding with success"
+                        logger.info(f"Sending response: {response}")
+                        await websocket.send(response)
+                        logger.info(f"Sent response: {response}")
                             
                     except websockets.exceptions.ConnectionClosed:
                         logger.warning("Connection closed, attempting to reconnect...")
