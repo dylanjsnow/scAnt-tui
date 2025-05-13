@@ -11,3 +11,6 @@ rawpy
 kafka-python
 nicegui 
 aiokafka
+pyzmq
+matplotlib
+websockets

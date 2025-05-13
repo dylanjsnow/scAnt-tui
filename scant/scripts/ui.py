@@ -1,38 +1,42 @@
 #!/usr/bin/env python3
-from utils import serializer, deserializer
-from multiprocessing import Manager, Queue
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+import asyncio
+from typing import Set
+import websockets
+from websockets.server import WebSocketServerProtocol
 from nicegui import app, ui
 
+CONNECTIONS: Set[WebSocketServerProtocol] = set()
 
-async def send_one():
-    producer = AIOKafkaProducer(bootstrap_servers='kafka:29092', value_serializer=serializer)
-    # Get cluster layout and initial topic/partition leadership information
-    await producer.start()
-    try:
-        # Produce message
-        await producer.send_and_wait("scant.control.commands", {"key":"value"})
-    finally:
-        # Wait for all pending messages to be delivered or expire.
-        await producer.stop()
-        
-async def consume():
-    consumer = AIOKafkaConsumer(
-        'scant.system.logs', 'scant.sensor.camera',
-        bootstrap_servers='kafka:29092',
-        value_deserializer=deserializer)
-    # Get cluster layout and join group `my-group`
-    await consumer.start()
-    try:
-        # Consume messages
-        async for msg in consumer:
-            print("consumed: ", msg)
-    finally:
-        # Will leave consumer group; perform autocommit if enabled.
-        await consumer.stop()
-        
-        
+ui.label('Websockets demo').classes('text-2xl')
+ui.label('Run this in the console to connect:')
+ui.code('python -m websockets ws://localhost:8765/').classes('pr-8 pt-1 h-12')
+with ui.row().classes('items-center'):
+    connections_label = ui.label('0')
+    ui.label('connections')
+    ui.button('send hello', on_click=lambda: websockets.broadcast(CONNECTIONS, 'Hello!')).props('flat')
+ui.separator().classes('mt-6')
+ui.label('incoming messages:')
+messages = ui.column().classes('ml-4')
 
-ui.button('compute', on_click=send_one)
-app.on_startup(consume)
+
+async def handle_connect(websocket: WebSocketServerProtocol):
+    """Register the new websocket connection, handle incoming messages and remove the connection when it is closed."""
+    try:
+        CONNECTIONS.add(websocket)
+        connections_label.text = len(CONNECTIONS)
+        async for data in websocket:
+            with messages:
+                ui.label(str(data))
+    finally:
+        CONNECTIONS.remove(websocket)
+        connections_label.text = len(CONNECTIONS)
+
+
+async def start_websocket_server():
+    async with websockets.serve(handle_connect, None, 8765):
+        await asyncio.Future()
+
+# start the websocket server when NiceGUI server starts
+app.on_startup(start_websocket_server)
+
 ui.run()

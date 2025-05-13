@@ -1,41 +1,50 @@
 #!/usr/bin/env python3
 import asyncio
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from utils import serializer, deserializer
+import websockets
+import json
+import logging
 
-# sent_one = False
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# async def send_one():
-#     producer = AIOKafkaProducer(bootstrap_servers='kafka:29092', value_serializer=serializer)
-#     # Get cluster layout and initial topic/partition leadership information
-#     await producer.start()
-#     try:
-#         # Produce message
-#         await producer.send_and_wait("scant.system.logs", {"response":"good"})
-#     finally:
-#         # Wait for all pending messages to be delivered or expire.
-#         await producer.stop()
-        
-async def consume():
-    consumer = AIOKafkaConsumer(
-        'scant.control.commands',
-        bootstrap_servers='kafka:29092',
-        value_deserializer=deserializer)
-    # Get cluster layout and join group `my-group`
-    await consumer.start()
-    try:
-        # Consume messages
-        print("camera.py: Consuming messages")
-        async for msg in consumer:
-            print("consumed: ", msg)
-            # if not sent_one:
-            #     await send_one()
-            #     sent_one = True
-    finally:
-        # Will leave consumer group; perform autocommit if enabled.
-        await consumer.stop()
-        
-        
+async def connect_to_websocket():
+    """Connect to the websocket server on scant-ui and handle messages."""
+    uri = "ws://scant-ui:8765"
+    
+    while True:
+        try:
+            logger.info(f"Attempting to connect to {uri}")
+            async with websockets.connect(uri) as websocket:
+                logger.info("Connected to websocket server")
+                
+                # Main message handling loop
+                while True:
+                    try:
+                        message = await websocket.recv()
+                        logger.info(f"Received message: {message}")
+                        
+                        # Try to parse as JSON if possible
+                        try:
+                            parsed_message = json.loads(message)
+                            logger.info(f"Parsed JSON: {parsed_message}")
+                        except json.JSONDecodeError:
+                            # Not JSON, just use the raw message
+                            pass
+                            
+                    except websockets.exceptions.ConnectionClosed:
+                        logger.warning("Connection closed, attempting to reconnect...")
+                        break
+                        
+        except Exception as e:
+            logger.error(f"Error in websocket connection: {e}")
+            
+        # Wait before attempting to reconnect
+        logger.info("Waiting 5 seconds before reconnecting...")
+        await asyncio.sleep(5)
 
-
-asyncio.run(consume())
+if __name__ == "__main__":
+    asyncio.run(connect_to_websocket())

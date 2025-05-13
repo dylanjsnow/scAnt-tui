@@ -87,6 +87,8 @@ services:
     restart: always
     ports:
       - 8080:8080
+      - 5555:5555
+      - 8765:8765
     privileged: true
     volumes:
       - ./scant/scripts:/app/scripts
@@ -96,6 +98,7 @@ services:
     container_name: scant-camera
     depends_on:
       - kafka-init
+      - scant-ui
     build:
       context: ./scant
       dockerfile: Dockerfile
