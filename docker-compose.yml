@@ -81,15 +81,13 @@ services:
       - kafka-init
     build:
       context: ./scant
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-ui
     environment:
       - PYTHONUNBUFFERED=1
     restart: always
     ports:
       - 8080:8080
-      - 5555:5555
       - 8765:8765
-    privileged: true
     volumes:
       - ./scant/scripts:/app/scripts
     command: ["python3","-u","/app/scripts/ui.py"]
@@ -101,11 +99,11 @@ services:
       - scant-ui
     build:
       context: ./scant
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-camera
     environment:
       - PYTHONUNBUFFERED=1
     restart: always
-    privileged: true
+    privileged: true # Required for USB camera access/ passthrough from host
     volumes:
       - ./scant/scripts:/app/scripts
       - /etc/udev/rules.d:/etc/udev/rules.d:ro  # Mount host's udev rules
