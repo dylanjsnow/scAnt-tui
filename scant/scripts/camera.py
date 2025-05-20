@@ -7,108 +7,54 @@ import os
 from PIL import Image
 from datetime import datetime
 import subprocess
-from utils import async_log_and_send, log_and_send
-import json
-# Configure logging
+from enum import Enum
+from utils import ScantCommunication, logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+communication = ScantCommunication(logger=logger)
+
+class CameraStatus(Enum):
+    IDLE = "IDLE"
+    CAPTURING = "CAPTURING"
+    COMPLETED = "COMPLETED"
+    ERROR = "ERROR"
+
 async def take_photo(websocket=None):
     """Take a photo with the camera and save it to the results directory."""
     try:
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Starting photo capture",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
-        
-        await async_log_and_send(
-            topic="scant.camera.status",
-            message="CAPTURING",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
-
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Creating results directory",
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Starting photo capture", logging.INFO)
+        await communication.send("scant.camera.status", CameraStatus.CAPTURING.value, logging.INFO)
+        await communication.send("scant.camera.capture", "Creating results directory", logging.DEBUG)
         
         os.makedirs("./results", exist_ok=True)
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Generating filename with timestamp",
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Generating filename with timestamp", logging.DEBUG)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         final_filename = f"{timestamp}.jpg"
         final_path = os.path.join("./results", final_filename)
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Getting connected cameras",
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Getting connected cameras", logging.DEBUG)
         
         cameras = get_connected_cameras()
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message=f"Connected Cameras: {cameras}",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", f"Connected Cameras: {cameras}", logging.INFO)
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Initializing camera",
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Initializing camera", logging.DEBUG)
         
         camera = gp.Camera()
         camera.init()
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Capturing image with gphoto2...",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Capturing image with gphoto2...", logging.INFO)
         
         file_path = camera.capture(gp.GP_CAPTURE_IMAGE)
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message=f'Camera file path: {file_path.folder}/{file_path.name}',
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", f'Camera file path: {file_path.folder}/{file_path.name}', logging.DEBUG)
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message=f'Saving image to: {final_path}',
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", f'Saving image to: {final_path}', logging.INFO)
         
         camera_file = camera.file_get(
             file_path.folder, 
@@ -117,40 +63,16 @@ async def take_photo(websocket=None):
         )
         camera_file.save(final_path)
         
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message="Cleaning up camera handler",
-            level="DEBUG",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.capture", "Cleaning up camera handler", logging.DEBUG)
         
         camera.exit()
         
-        await async_log_and_send(
-            topic="scant.camera.status",
-            message="COMPLETED",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
-        
-        await async_log_and_send(
-            topic="scant.camera.status",
-            message="IDLE",
-            level="INFO",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.status", CameraStatus.COMPLETED.value, logging.INFO)
+        await communication.send("scant.camera.status", CameraStatus.IDLE.value, logging.INFO)
                 
     except Exception as e:
-        await async_log_and_send(
-            topic="scant.camera.capture",
-            message=f"Error taking photo: {str(e)}",
-            level="ERROR",
-            logger=logger,
-            websocket=websocket
-        )
+        await communication.send("scant.camera.status", CameraStatus.ERROR.value, logging.ERROR)
+        await communication.send("scant.camera.capture", f"Error taking photo: {str(e)}", logging.ERROR)
 
 def get_connected_cameras() -> list:
     """Get a list of connected cameras using gphoto2."""
@@ -179,10 +101,10 @@ def get_connected_cameras() -> list:
         
         return cameras
     except subprocess.CalledProcessError:
-        log_and_send("scant.camera.error", "Error detecting cameras", logger)
+        communication.send("scant.camera.error", "Error detecting cameras", logging.ERROR)
         return []
     except Exception as e:
-        log_and_send("scant.camera.error", f"Error: {str(e)}", logger)
+        communication.send("scant.camera.error", f"Error: {str(e)}", logging.ERROR)
         return []
         
 def save_image_with_exif(img, filename):
@@ -246,70 +168,29 @@ async def connect_to_websocket():
     
     while True:
         try:
-            await async_log_and_send(
-                topic="scant.camera.websocket",
-                message=f"Attempting to connect to {uri}",
-                level="INFO",
-                logger=logger,
-                websocket=None
-            )
+            await communication.send("scant.camera.websocket", f"Attempting to connect to {uri}", logging.INFO)
             
             async with websockets.connect(uri) as websocket:
-                await async_log_and_send(
-                    topic="scant.camera.websocket",
-                    message="Connected to websocket server",
-                    level="INFO",
-                    logger=logger,
-                    websocket=websocket
-                )
-                
+                await communication.send("scant.camera.websocket", "Connected to websocket server", logging.INFO)
+                await communication.send("scant.camera.websocket", "Waiting for photo capture command...", logging.INFO)
+                await communication.send("scant.camera.status", CameraStatus.IDLE.value, logging.INFO)
                 while True:
                     try:
                         message = await websocket.recv()
-                        await async_log_and_send(
-                            topic="scant.camera.websocket",
-                            message=f"Received message: {message}",
-                            level="INFO",
-                            logger=logger,
-                            websocket=websocket
-                        )
+                        await communication.send("scant.camera.websocket", f"Received message: {message}", logging.INFO)
                         
                         await take_photo(websocket)
                         
-                        await async_log_and_send(
-                            topic="scant.camera.websocket",
-                            message="Photo capture completed successfully",
-                            level="INFO",
-                            logger=logger,
-                            websocket=websocket
-                        )
+                        await communication.send("scant.camera.capture", "Photo capture completed successfully", logging.INFO)
                             
                     except websockets.exceptions.ConnectionClosed:
-                        await async_log_and_send(
-                            topic="scant.camera.websocket",
-                            message="Connection closed, attempting to reconnect...",
-                            level="WARN",
-                            logger=logger,
-                            websocket=None
-                        )
+                        await communication.send("scant.camera.websocket", "Connection closed, attempting to reconnect...", logging.WARN)
                         break
                         
         except Exception as e:
-            await async_log_and_send(
-                topic="scant.camera.websocket",
-                message=f"Error in websocket connection: {e}",
-                level="ERROR",
-                logger=logger,
-                websocket=None
-            )
+            await communication.send("scant.camera.websocket", f"Error in websocket connection: {e}", logging.ERROR)
             
-        await async_log_and_send(
-            topic="scant.camera.websocket",
-            message="Waiting 5 seconds before reconnecting...",
-            level="INFO",
-            logger=logger,
-            websocket=None
-        )
+        await communication.send("scant.camera.websocket", "Waiting 5 seconds before reconnecting...", logging.INFO)
         await asyncio.sleep(5)
 
 if __name__ == "__main__":
