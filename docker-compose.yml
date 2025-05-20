@@ -107,3 +107,20 @@ services:
       - /run/udev:/run/udev:ro  # Mount host's udev runtime
     command: ["python3","-u","/app/scripts/camera.py"]
 
+  scant-motor:
+    container_name: scant-motor
+    depends_on:
+      - scant-ui
+    build:
+      context: ./scant
+      dockerfile: Dockerfile-motor
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
+    privileged: true # Required for USB camera access/ passthrough from host
+    volumes:
+      - ./scant:/app
+      - /etc/udev/rules.d:/etc/udev/rules.d:ro  # Mount host's udev rules
+      - /run/udev:/run/udev:ro  # Mount host's udev runtime
+    command: ["python3","-u","/app/scripts/stepper.py"]   
+

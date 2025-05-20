@@ -26,7 +26,6 @@ ui.separator().classes('mt-6')
 ui.label('Websocket messages:')
 messages = ui.column().classes('ml-4')
 
-
 async def handle_connect(websocket: WebSocketServerProtocol):
     """Register the new websocket connection, handle incoming messages and remove the connection when it is closed."""
     try:
