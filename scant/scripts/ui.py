@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import json
 import logging
 from typing import Set
 import websockets
@@ -23,25 +24,36 @@ with ui.row().classes('items-center'):
     ui.label('connections')
     ui.button('send hello', on_click=lambda: websockets.broadcast(CONNECTIONS, 'Hello!')).props('flat')
 ui.separator().classes('mt-6')
-ui.label('Websocket messages:')
-messages = ui.column().classes('ml-4')
+ui.label('Log:')
+messages = ui.scroll_area().classes('w-350 h-350 ml-4 border messages-container')
 
 async def handle_connect(websocket: WebSocketServerProtocol):
     """Register the new websocket connection, handle incoming messages and remove the connection when it is closed."""
     try:
         CONNECTIONS.add(websocket)
         connections_label.text = len(CONNECTIONS)
-        logger.info(f"New connection established. Total connections: {len(CONNECTIONS)}")
+        logger.info(f"New connection established from {websocket.remote_address}. Total connections: {len(CONNECTIONS)}")
         
         async for data in websocket:
-            logger.info(f"Received message: {data}")
-            with messages:
-                ui.label(str(data))
-            
-            # Send acknowledgment back
-            # await websocket.send(f"Received: {data}")
-            # logger.info(f"Sent acknowledgment for message: {data}")
-            
+            try:
+                # Parse the data if it's JSON
+                try:
+                    # Try to parse as JSON
+                    parsed_data = json.loads(data)
+                    message_text = f"Received: {parsed_data.get('topic', '')}: {parsed_data.get('message', '')}"
+                except json.JSONDecodeError:
+                    # If not JSON, use raw data
+                    message_text = f"Received: {data}"
+                
+                # Use with_content instead of add for ScrollArea
+                with messages:
+                    ui.label(message_text).classes('break-all')
+                
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                
+    except websockets.exceptions.ConnectionClosed:
+        logger.info(f"Connection closed normally by {websocket.remote_address}")
     except Exception as e:
         logger.error(f"Error handling websocket connection: {e}")
     finally:
@@ -52,7 +64,7 @@ async def handle_connect(websocket: WebSocketServerProtocol):
 
 async def start_websocket_server():
     logger.info("Starting websocket server on port 8765")
-    async with websockets.serve(handle_connect, None, 8765):
+    async with websockets.serve(handle_connect, "0.0.0.0", 8765):
         await asyncio.Future()
 
 # start the websocket server when NiceGUI server starts
