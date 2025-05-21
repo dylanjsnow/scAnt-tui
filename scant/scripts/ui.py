@@ -3,8 +3,7 @@ import asyncio
 import json
 import logging
 from typing import Set
-import websockets
-from websockets.server import WebSocketServerProtocol
+from utils import ScantCommunicationServer
 from nicegui import app, ui
 
 # Configure logging
@@ -14,60 +13,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CONNECTIONS: Set[WebSocketServerProtocol] = set()
+server = ScantCommunicationServer(logger=logger)
 
-ui.label('Websockets demo').classes('text-2xl')
-ui.label('Run this in the console to connect:')
-ui.code('python -m websockets ws://scant-ui:8765/').classes('pr-8 pt-1 h-12')
+ui.label('Scant UI').classes('text-2xl')
 with ui.row().classes('items-center'):
+    ui.label('Active connections: ')
     connections_label = ui.label('0')
-    ui.label('connections')
-    ui.button('send hello', on_click=lambda: websockets.broadcast(CONNECTIONS, 'Hello!')).props('flat')
+    ui.button('test connections', on_click=lambda: server.broadcast('test')).props('flat')
 ui.separator().classes('mt-6')
 ui.label('Log:')
 messages = ui.scroll_area().classes('w-350 h-350 ml-4 border messages-container')
 
-async def handle_connect(websocket: WebSocketServerProtocol):
-    """Register the new websocket connection, handle incoming messages and remove the connection when it is closed."""
+async def handle_ui_message(data):
+    """Handle incoming messages and update the UI."""
+    if isinstance(data, Set):
+        # Update connections display
+        connections_label.text = ', '.join(str(conn.remote_address) for conn in data)
+        return
+
     try:
-        CONNECTIONS.add(websocket)
-        connections_label.text = len(CONNECTIONS)
-        logger.info(f"New connection established from {websocket.remote_address}. Total connections: {len(CONNECTIONS)}")
+        # Parse the data if it's JSON
+        try:
+            parsed_data = json.loads(data)
+            message_text = f"Received: {parsed_data.get('topic', '')}: {parsed_data.get('message', '')}"
+        except json.JSONDecodeError:
+            message_text = f"Received: {data}"
         
-        async for data in websocket:
-            try:
-                # Parse the data if it's JSON
-                try:
-                    # Try to parse as JSON
-                    parsed_data = json.loads(data)
-                    message_text = f"Received: {parsed_data.get('topic', '')}: {parsed_data.get('message', '')}"
-                except json.JSONDecodeError:
-                    # If not JSON, use raw data
-                    message_text = f"Received: {data}"
-                
-                # Use with_content instead of add for ScrollArea
-                with messages:
-                    ui.label(message_text).classes('break-all')
-                
-            except Exception as e:
-                logger.error(f"Error processing message: {e}")
-                
-    except websockets.exceptions.ConnectionClosed:
-        logger.info(f"Connection closed normally by {websocket.remote_address}")
+        with messages:
+            ui.label(message_text).classes('break-all')
+    
     except Exception as e:
-        logger.error(f"Error handling websocket connection: {e}")
-    finally:
-        CONNECTIONS.remove(websocket)
-        connections_label.text = len(CONNECTIONS)
-        logger.info(f"Connection closed. Remaining connections: {len(CONNECTIONS)}")
-
-
-async def start_websocket_server():
-    logger.info("Starting websocket server on port 8765")
-    async with websockets.serve(handle_connect, "0.0.0.0", 8765):
-        await asyncio.Future()
+        logger.error(f"Error processing message: {e}")
 
 # start the websocket server when NiceGUI server starts
-app.on_startup(start_websocket_server)
+async def start_server():
+    try:
+        await server.start(handle_ui_message)
+    except Exception as e:
+        logger.error(f"Error starting server: {e}")
+
+# Handle server startup and shutdown
+app.on_startup(lambda: asyncio.create_task(start_server()))
+app.on_shutdown(server.stop)
 
 ui.run()
