@@ -2,7 +2,7 @@
 import asyncio
 import websockets
 import logging
-from utils import ScantCommunication, logging
+from communication import ScantCommunicationClient, logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-communication = ScantCommunication(logger=logger)
+communication = ScantCommunicationClient(logger=logger)
 
 async def connect_to_websocket():
     """Connect to the websocket server on scant-ui and handle messages."""

@@ -2,14 +2,33 @@
 import logging
 from typing import Optional, Set
 import json
-from websockets.asyncio.client import ClientConnection
 from datetime import datetime
 import websockets
 import asyncio
 from websockets.server import WebSocketServerProtocol
 
-class ScantCommunication:
-    """Client class for connecting to the UI server and sending messages."""
+def format_message(topic: str, message: str, level: int = logging.INFO) -> str:
+    """
+    Format a message with topic, level and timestamp.
+    
+    Args:
+        topic: Topic path (e.g. 'camera.capture', 'camera.status')
+        message: The message content
+        level: Message severity level from logging module
+        
+    Returns:
+        JSON string of the formatted message
+    """
+    formatted_message = {
+        "topic": topic,
+        "message": message,
+        "level": logging.getLevelName(level),
+        "timestamp": datetime.now().isoformat(),
+    }
+    return json.dumps(formatted_message)
+
+class ScantCommunicationClient:
+    """Client class for connecting to the (UI) server and sending messages."""
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.logger = logger or logging.getLogger()
         self.websocket = None
@@ -54,21 +73,15 @@ class ScantCommunication:
         
         Args:
             topic: Topic path (e.g. 'camera.capture', 'camera.status')
-            message: The message content to log and send
+            message: The message content to log and send (e.g "Test successful", "CAPTURING")
             level: Message severity level from logging module
         """
-        formatted_message = {
-            "topic": f"{topic}",  # Ensure scant prefix
-            "message": message,
-            "level": logging.getLevelName(level),
-            "timestamp": datetime.now().isoformat(),
-        }
-        
-        self.logger.log(level, f"{formatted_message['topic']}: {message}")
+        self.logger.log(level, f"{topic}: {message}")
         
         if self.websocket and self._connected:
             try:
-                await self.websocket.send(json.dumps(formatted_message))
+                formatted_message = format_message(topic, message, level)
+                await self.websocket.send(formatted_message)
             except Exception as e:
                 self.logger.error(f"Failed to send message via websocket: {e}")
 
@@ -77,7 +90,7 @@ class ScantCommunicationServer:
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.logger = logger or logging.getLogger()
         self.connections: Set[WebSocketServerProtocol] = set()
-        self.ui_message_handler = None
+        self.message_handler = None
         self.server = None
         self._running = False
 
@@ -85,14 +98,14 @@ class ScantCommunicationServer:
         """Register the new websocket connection, handle incoming messages and remove the connection when it is closed."""
         try:
             self.connections.add(websocket)
-            if self.ui_message_handler:
-                await self.ui_message_handler(self.connections)
+            if self.message_handler:
+                await self.message_handler(self.connections)
             self.logger.info(f"New connection established from {websocket.remote_address}. Total connections: {len(self.connections)}")
             
             async for data in websocket:
                 try:
-                    if self.ui_message_handler and self._running:
-                        await self.ui_message_handler(data)
+                    if self.message_handler and self._running:
+                        await self.message_handler(data)
                 except Exception as e:
                     self.logger.error(f"Error processing message: {e}")
                     
@@ -102,13 +115,13 @@ class ScantCommunicationServer:
             self.logger.error(f"Error handling websocket connection: {e}")
         finally:
             self.connections.remove(websocket)
-            if self.ui_message_handler:
-                await self.ui_message_handler(self.connections)
+            if self.message_handler:
+                await self.message_handler(self.connections)
             self.logger.info(f"Connection closed. Remaining connections: {len(self.connections)}")
 
     async def start(self, message_handler=None):
         """Start the websocket server."""
-        self.ui_message_handler = message_handler
+        self.message_handler = message_handler
         self._running = True
         self.logger.info("Starting websocket server on port 8765")
         self.server = await websockets.serve(self.handle_connect, "0.0.0.0", 8765)
@@ -126,5 +139,9 @@ class ScantCommunicationServer:
     def broadcast(self, message: str):
         """Broadcast a message to all connected clients."""
         if self._running:
-            websockets.broadcast(self.connections, message)
+            try:
+                formatted_message = format_message("server.broadcast", message, logging.INFO)
+                websockets.broadcast(self.connections, formatted_message)
+            except Exception as e:
+                self.logger.error(f"Failed to broadcast message: {e}")
 

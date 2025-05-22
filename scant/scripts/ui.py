@@ -3,7 +3,8 @@ import asyncio
 import json
 import logging
 from typing import Set
-from utils import ScantCommunicationServer
+from communication import ScantCommunicationServer
+from websockets.server import WebSocketServerProtocol
 from nicegui import app, ui
 
 # Configure logging

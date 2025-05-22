@@ -8,7 +8,7 @@ from PIL import Image
 from datetime import datetime
 import subprocess
 from enum import Enum
-from utils import ScantCommunication, logging
+from communication import ScantCommunicationClient, logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-communication = ScantCommunication(logger=logger)
+communication = ScantCommunicationClient(logger=logger)
 
 class CameraStatus(Enum):
     IDLE = "IDLE"
