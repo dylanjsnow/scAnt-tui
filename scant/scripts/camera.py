@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import json
 import websockets
 import logging
 import gphoto2 as gp
@@ -167,8 +168,14 @@ def save_image_with_exif(img, filename):
 async def handle_message(message: str):
     """Handle messages received from the UI."""
     await communication.send("camera.websocket", f"Received message: {message}", logging.INFO)
-    await take_photo()
-    await communication.send("camera.capture", "Photo capture completed successfully", logging.INFO)
+    message_json = json.loads(message)
+    logger.info(f"Received message: {message_json}")
+    if message_json["topic"] == "server.broadcast" and message_json["message"] == "TAKE_PHOTO":
+        await take_photo()
+        await communication.send("camera.capture", "Photo capture completed successfully", logging.INFO)
+
+    if message_json["topic"] == "server.broadcast" and message_json["message"] == "TEST":
+        await communication.send("camera.capture", "Test successful", logging.INFO)
 
 if __name__ == "__main__":
     asyncio.run(communication.connect(handle_message))
