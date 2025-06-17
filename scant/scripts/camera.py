@@ -174,8 +174,11 @@ async def handle_message(message: str):
         await take_photo()
         await communication.send("camera.capture", "Photo capture completed successfully", logging.INFO)
 
-    if message_json["topic"] == "server.broadcast" and message_json["message"] == "TEST":
-        await communication.send("camera.capture", "Test successful", logging.INFO)
+    if message_json["topic"] == "server.broadcast" and message_json["message"] == "INITIALIZE":
+        await communication.send("camera.info", "Initializing camera", logging.INFO)
+        cameras = get_connected_cameras()
+        await communication.send("camera.initialized", {"cameras": cameras})
+        await communication.send("camera.info", "Camera initialized", logging.INFO)
 
 if __name__ == "__main__":
     asyncio.run(communication.connect(handle_message))

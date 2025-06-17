@@ -3,7 +3,6 @@ import asyncio
 from enum import Enum
 import json
 import subprocess
-import websockets
 import logging
 from communication import ScantCommunicationClient, logging
 from utils import MotorStatus, MotorAxis
@@ -31,6 +30,10 @@ class Motor:
     async def energize_motor(self, energize: bool):
         """Energize the motor."""
         await communication.send("motor.energize", f"Energizing motor {self.axis}", logging.INFO)
+        
+    async def deenergize_motor(self):
+        """Deenergize the motor."""
+        await communication.send("motor.deenergize", f"Deenergizing motor {self.axis}", logging.INFO)
     
 def get_stepper_motor_serial_numbers():
     logger.info("Getting list of connected TIC stepper motors")
@@ -45,10 +48,15 @@ def get_stepper_motor_serial_numbers():
         logger.error(f"Error getting stepper motor serial numbers: {e}")
         return []    
         
-stepper_motor_serial_numbers = get_stepper_motor_serial_numbers()
-yaw_motor = Motor(stepper_motor_serial_numbers[0])
-tilt_motor = Motor(stepper_motor_serial_numbers[1])
-forward_motor = Motor(stepper_motor_serial_numbers[2])
+
+
+async def initialize():
+    stepper_motor_serial_numbers = get_stepper_motor_serial_numbers()
+    yaw_motor = Motor(stepper_motor_serial_numbers[0])
+    tilt_motor = Motor(stepper_motor_serial_numbers[1])
+    forward_motor = Motor(stepper_motor_serial_numbers[2])  
+    
+    return yaw_motor, tilt_motor, forward_motor
 
 async def handle_message(message: str):
     """Handle messages received from the UI."""
@@ -59,8 +67,15 @@ async def handle_message(message: str):
         # await take_photo()
         await communication.send("motor.capture", "Started moving motor", logging.INFO)
 
-    if message_json["topic"] == "server.broadcast" and message_json["message"] == "TEST":
-        await communication.send("motor.capture", "Test successful", logging.INFO)
+    if message_json["topic"] == "server.broadcast" and message_json["message"] == "INITIALIZE":
+        await communication.send("motor.info", "Initializing motors", logging.INFO)
+        yaw_motor, tilt_motor, forward_motor = await initialize()
+        await communication.send("motor.info", "Motors initialized", logging.INFO)
+        await communication.send("motor.initialized", {
+            "yaw_motor": yaw_motor.serial_number,
+            "tilt_motor": tilt_motor.serial_number,
+            "forward_motor": forward_motor.serial_number
+        })
 
 if __name__ == "__main__":
     asyncio.run(communication.connect(handle_message))

@@ -14,6 +14,12 @@ class MotorAxis(Enum):
     TILT = "TILT"
     YAW = "YAW"
     
+MOTOR_AXIS_SERIALS = {
+    MotorAxis.FORWARD: "1",
+    MotorAxis.TILT: "2",
+    MotorAxis.YAW: "3",
+}
+    
 CURRENT_LIMIT_OPTIONS: Final[Tuple[Tuple[str, str], ...]] = (
     ("0 mA (0)", "0"),
     ("1 mA (1)", "1"),

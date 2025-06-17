@@ -7,7 +7,7 @@ from communication import ScantCommunicationServer
 from websockets.server import WebSocketServerProtocol
 from nicegui import app, ui
 from nicegui.events import ValueChangeEventArguments
-from utils import MotorAxis, CURRENT_LIMIT_OPTIONS
+from utils import MotorAxis, CURRENT_LIMIT_OPTIONS, MOTOR_AXIS_SERIALS  
 
 # Configure logging
 logging.basicConfig(
@@ -25,33 +25,57 @@ def set_motor_target_position(event: ValueChangeEventArguments, motor_axis: Moto
     print(motor_axis)
 def set_motor_speed(event: ValueChangeEventArguments, motor_axis: MotorAxis):
     motor = event.sender.label
+    print("set_motor_speed")
     print(motor)
     print(event.value)
     print(event.sender)
     print(motor_axis)
-
+def set_motor_axis_serial(event: ValueChangeEventArguments, motor_axis: MotorAxis, motor_serial_number: str):
+    motor = event.sender.label
+    print("set_motor_axis_serial")
+    print(motor)
+    print(event.value)
+    print(event.sender)
+    print(motor_axis)
+    print(motor_serial_number)
+    
 ui.label('Scant UI').classes('text-3xl')
 
 ui.label('Connections').classes('text-2xl')
 with ui.row().classes('items-center'):
     ui.label('Active connections: ')
     connections_label = ui.label('0')
-    ui.button('test connections', on_click=lambda: server.broadcast('TEST')).props('flat')
+    ui.button('INITIALIZE', on_click=lambda: server.broadcast('INITIALIZE')).props('flat')
 ui.separator().classes('mt-6')
 
+ui.label('Cameras').classes('text-2xl')
+with ui.row().classes('items-center'):
+    ui.label('Active cameras: ')
+    cameras_label = ui.label('0')
+ui.separator().classes('mt-6')
+
+@ui.refreshable
+def motors_ui(motor_axis_serials: dict):
+    for motor_axis_serial in motor_axis_serials:
+        with ui.grid(columns=7).classes('items-center'):
+            ui.label(motor_axis_serial.name)
+            ui.select(options=[motor_axis_serials[axis] for axis in motor_axis_serials], 
+                value=motor_axis_serials[motor_axis_serial], 
+                on_change=lambda e, m=motor_axis_serial: set_motor_axis_serial(e, m))
+            ui.input('Target position', 
+                on_change=lambda e, m=motor_axis_serial: set_motor_target_position(e, m), 
+                validation={'Input must be a number': lambda value: value.isdigit()})
+            ui.html('Speed')
+            ui.select(options=[label for label, value in CURRENT_LIMIT_OPTIONS], 
+                value=CURRENT_LIMIT_OPTIONS[0][0], 
+                on_change=lambda e, m=motor_axis_serial: set_motor_speed(e, m))
+            ui.button('energize motor', on_click=lambda: server.broadcast('ENERGIZE_MOTOR')).props('flat')
+            ui.button('deenergize motor', on_click=lambda: server.broadcast('DEENERGIZE_MOTOR')).props('flat')
+
 ui.label('Motors').classes('text-2xl')
-for motor in MotorAxis:
-    with ui.row().classes('items-center'):
-        ui.label(motor)
-        ui.input('Target position', 
-            on_change=lambda e, m=motor: set_motor_target_position(e, m), 
-            value="",
-            validation={'Input must be a number': lambda value: value.isdigit()})
-        ui.html('Speed')
-        ui.select(options=[label for label, value in CURRENT_LIMIT_OPTIONS], 
-            value=CURRENT_LIMIT_OPTIONS[0][0], 
-            on_change=lambda e, m=motor: set_motor_speed(e, m))
-ui.button('move motor', on_click=lambda: server.broadcast('MOVE_MOTOR')).props('flat')
+motor_axis_serials = MOTOR_AXIS_SERIALS # Initialize the motor axis serials, will be changed later
+motors_ui(motor_axis_serials)
+
 ui.separator().classes('mt-6')
 
 # Log
@@ -75,6 +99,27 @@ async def handle_ui_message(data):
         
         with messages:
             ui.label(message_text).classes('break-all')
+            
+        if parsed_data.get('topic') == 'motor.set_serial_numbers':
+            motor_serial_numbers = parsed_data.get('message')
+            for motor_serial_number in motor_serial_numbers:
+                motor_serial_number_label = ui.label(motor_serial_number)
+                motor_serial_number_label.classes('break-all')
+                
+        if parsed_data.get('topic') == 'motor.initialized':
+            motor_axis_serial_numbers = parsed_data.get('message')
+            print("motor_axis_serial_numbers: ", motor_axis_serial_numbers)
+            new_motor_axis_serials = {
+                MotorAxis.FORWARD: motor_axis_serial_numbers['forward_motor'],
+                MotorAxis.TILT: motor_axis_serial_numbers['tilt_motor'],
+                MotorAxis.YAW: motor_axis_serial_numbers['yaw_motor'],
+            }
+            motors_ui.refresh(new_motor_axis_serials)
+                
+        if parsed_data.get('topic') == 'camera.initialized':
+            cameras = parsed_data.get('message')
+            cameras_label.text = ', '.join(str(camera) for camera in cameras.get('cameras', []))
+
     
     except Exception as e:
         logger.error(f"Error processing message: {e}")
