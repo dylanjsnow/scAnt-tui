@@ -43,18 +43,6 @@ sudo adduser $USER plugdev
 
 ### Configuration
 
-#### WSL notes
-
-In addition to the below *Configure devices* section, WSL users can try:
-
-1. Install win-usbipd via Powershell Windows Package Manager, then run ([reference](https://github.com/dorssel/usbipd-win)):
-```powershell
-winget install usbipd
-usbipd list # Confirm the USB devices are plugged in and visible on the Windows Host e.g 3-1    1ffb:00bd  Pololu Tic T500 Not Shared
-usbipd bind --busid=<BUSID> # Do this for each Pololu Tic T500 USB devices and the Canon camera, may require administrator Powershell, until they are 'Shared'
-usbipd attach --wsl --busid=<BUSID> # Do this for each Pololu Tic T500 and Canon camera
-```
-
 #### Configure devices
 
 1. Plug-in the Pololu Tic500 stepper motors via USB or USB hub, and confirm they are detected by the system:
@@ -95,13 +83,20 @@ textual run --dev scripts/main.py
 - Current limit settings: https://www.pololu.com/docs/0J71/6#setting-current-limit
 - Maximum current limit for Tic T500 for the Pitch/ Yaw servo is 2131 mA.
 - Others are uncertain, believed to be 1000 mA.
-
-Ranges for stepper motors:
-
 - Tilt: 10 positions, -15000 to 12000 with middle zeroing, speed 15000
 - Yaw: 18 positions,0 to 1800 with no zeroing, speed 1000
 - Forward: 0 to 170000 with middle zeroing, speed 50000
+- Speed for servos is 200_000_000, 5_000_000_000 maximum
 
+### Kafka setup
+
+Run with docker compose:
+
+```bash
+docker compose up
+```
+
+Open the Kafka UI at [http://localhost:8080/](http://localhost:8080/)
 
 ### Polarized Light setup
 
@@ -114,9 +109,9 @@ Ranges for stepper motors:
 
 1st attempt at complete scan:
 
-Time to take 10 photos across 10 positions of10000 position units (-5000 to 5000) of Forward axis movement at default speed: 33 seconds
-Time to take 180 photos across 18 positions of 1800 position units of Yaw axis movement at default speed: 1644 seconds (27.4 minutes) = 1.0GB
-Time to take 900 photos across 5 positions of -2000 position units of Tilt axis movement at default speed: 8220 seconds (2 hours 17 minutes) = 4.9GB
+- Time to take 10 photos across 10 positions of 10000 position units (-5000 to 5000) of Forward axis movement at default speed: 33 seconds
+- Time to take 180 photos across 18 positions of 1800 position units of Yaw axis movement at default speed: 1644 seconds (27.4 minutes) = 1.0GB
+- Time to take 900 photos across 5 positions of -2000 position units of Tilt axis movement at default speed: 8220 seconds (2 hours 17 minutes) = 4.9GB
 
 #### Camera polarization filter image examples
 
@@ -160,5 +155,6 @@ All below images were taken with the same settings:
 - Light Polarization Filter: ScanSpace polarized light filter for Godox Wistro AR400 ring flash, mounted with handle pointing upwards
 - Lens Polarization Filter: angled with words 'CANON' at an angle of about 45 degrees clockwise from pointing upwards as looking in the same direction as the lens
 - Lens: Laowa 65mm macro
+
 
 

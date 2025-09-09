@@ -1,0 +1,27 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    build-essential \
+    gphoto2 \
+    udev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install Python requirements
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
+
+# Create udev rules directory first
+RUN mkdir -p /etc/udev/rules.d
+
+# Copy application code
+COPY . .
+
+# Add user and give USB access
+RUN useradd -m -G dialout,plugdev scant
+USER scant

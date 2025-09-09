@@ -1,0 +1,16 @@
+gphoto2
+pyusb
+ticlib
+textual
+textual-dev
+textual[syntax]
+textual-slider
+Pillow
+imageio
+rawpy
+kafka-python
+nicegui 
+aiokafka
+pyzmq
+matplotlib
+websockets
